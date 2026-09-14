@@ -51,10 +51,10 @@
     "customer_id": {
       "type": ["string", "null"],
       "format": "uuid",
-      "description": "Customer (client company) this site belongs to. Set via FK resolver from client/customer name on import.",
+      "description": "Customer that owns this site. Resolved by FK match on import.",
+      "x-eq-source-aliases": ["customer_id"],
       "x-eq-foreign-key": "customer.customer_id",
-      "x-eq-fk-fuzzy-match-on": ["customer.company_name", "customer.code", "customer.customer_entity_legal_name"],
-      "x-eq-source-aliases": ["customer", "client", "customer_name", "client_name", "company"]
+      "x-eq-fk-fuzzy-match-on": ["customers.company_name", "customers.external_id"]
     },
     "client_name": {
       "type": ["string", "null"],

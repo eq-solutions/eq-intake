@@ -31,7 +31,7 @@ export interface Site {
    */
   code?: string | null;
   /**
-   * Customer (client company) this site belongs to. Set via FK resolver from client/customer name on import.
+   * Customer that owns this site. Resolved by FK match on import.
    */
   customer_id?: string | null;
   /**
