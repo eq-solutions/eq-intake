@@ -15,9 +15,9 @@ export interface Contact {
    */
   tenant_id: string;
   /**
-   * Customer this contact belongs to. Resolved by FK match on import.
+   * Customer this contact belongs to. Resolved by FK match on import. Nullable — a contact can exist with no customer link (canonical column has been NULLABLE since eq-shell migration 0035, 2026-06-03; live on both tenant planes as of 2026-09-14).
    */
-  customer_id: string;
+  customer_id?: string | null;
   /**
    * Source-system contact ID.
    */

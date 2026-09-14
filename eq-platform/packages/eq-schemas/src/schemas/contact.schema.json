@@ -8,7 +8,7 @@
   "x-eq-module": "core",
   "x-eq-version": "1.0.0",
   "x-eq-table": "contacts",
-  "required": ["contact_id", "tenant_id", "customer_id", "first_name", "last_name"],
+  "required": ["contact_id", "tenant_id", "first_name", "last_name"],
   "properties": {
     "contact_id": {
       "type": "string",
@@ -24,9 +24,9 @@
       "x-eq-system-managed": true
     },
     "customer_id": {
-      "type": "string",
+      "type": ["string", "null"],
       "format": "uuid",
-      "description": "Customer this contact belongs to. Resolved by FK match on import.",
+      "description": "Customer this contact belongs to. Resolved by FK match on import. Nullable — a contact can exist with no customer link (canonical column has been NULLABLE since eq-shell migration 0035, 2026-06-03; live on both tenant planes as of 2026-09-14).",
       "x-eq-source-aliases": ["customer_id", "account_id", "company_id"],
       "x-eq-foreign-key": "customer.customer_id",
       "x-eq-fk-fuzzy-match-on": ["customers.company_name", "customers.external_id"]
