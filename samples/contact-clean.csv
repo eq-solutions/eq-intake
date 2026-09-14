@@ -1,7 +1,7 @@
-customer_id,site_id,name,role,email,phone,is_primary,active
-11111111-1111-1111-1111-111111111111,,Sarah Williams,Facilities Manager,s.williams@equinix.com,+61412345678,true,true
-,aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1,Tom Nguyen,Site Lead,t.nguyen@equinix.com,+61413200001,false,true
-,aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1,Reception SY1,Front Desk,reception.sy1@equinix.com,+61280000001,false,true
-22222222-2222-2222-2222-222222222222,,Anna Petrović,Procurement,anna.petrovic@jemena.com.au,+61412999000,true,true
-33333333-3333-3333-3333-333333333333,,Michael O'Brien,Engineering Mgr,mob@ramsayhealth.com.au,,false,true
-,aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa9,Onsite Crew Lead,Lead Tech,sy9.lead@equinix.com,+61419555222,true,true
+customer_id,first_name,last_name,email,work_phone,mobile_phone,position,is_default_quote_contact,active
+11111111-1111-1111-1111-111111111111,Sarah,Williams,s.williams@equinix.com,,+61412345678,Facilities Manager,true,true
+11111111-1111-1111-1111-111111111111,Tom,Nguyen,t.nguyen@equinix.com,,+61413200001,Site Lead,false,true
+11111111-1111-1111-1111-111111111111,Priya,Anand,reception.sy1@equinix.com,+61280000001,,Front Desk,false,true
+22222222-2222-2222-2222-222222222222,Anna,Petrović,anna.petrovic@jemena.com.au,,+61412999000,Procurement,true,true
+33333333-3333-3333-3333-333333333333,Michael,O'Brien,mob@ramsayhealth.com.au,,,Engineering Mgr,false,true
+11111111-1111-1111-1111-111111111111,Chris,Idowu,sy9.lead@equinix.com,,+61419555222,Lead Tech,true,true
