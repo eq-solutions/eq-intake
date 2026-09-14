@@ -64,7 +64,7 @@
  * Missing required fields cause row-level rejections.
  *
  * Integration builders: read the schema at
- *   https://github.com/eq-solutions/eq-intake/schemas/<entity>.schema.json
+ *   https://github.com/eq-solutions/eq-solves-intake/blob/main/schemas/<entity>.schema.json
  */
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'

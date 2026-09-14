@@ -1,11 +1,21 @@
 /**
  * Seed eq_schema_registry from the canonical schema files.
  *
- * Run from the monorepo root:
- *   pnpm tsx supabase/seed/seed-schemas.ts
+ * Run from the eq-solves-intake repo root:
+ *   pnpm tsx sql/seed-schemas.ts
  *
- * Reads every *.schema.json from packages/eq-schemas/src/schemas/, then upserts
- * into eq_schema_registry, marking the latest version of each entity as is_current.
+ * NOTE (2026-09-15): the above doesn't actually work today — this file
+ * imports @supabase/supabase-js, but no package.json in eq-platform's
+ * workspace declares it as a dependency, and eq-solves-intake has no root
+ * package.json/node_modules of its own either. The SCHEMA_DIR path below is
+ * correct for this file's current location; the missing-dependency problem
+ * is separate and unresolved. See eq-platform/scripts/db-apply.ts for the
+ * currently-wired alternative (generates SQL to paste into the Supabase SQL
+ * editor rather than writing via the JS client directly).
+ *
+ * Reads every *.schema.json from eq-platform/packages/eq-schemas/src/schemas/,
+ * then upserts into eq_schema_registry, marking the latest version of each
+ * entity as is_current.
  *
  * Idempotent: re-running with the same versions is a no-op. Bumping a schema's
  * version inserts a new row and flips the old is_current to false (via trigger).
@@ -29,7 +39,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
 // ============================================================================
 // LOAD SCHEMAS
 // ============================================================================
-const SCHEMA_DIR = join(__dirname, '..', '..', 'packages', 'eq-schemas', 'src', 'schemas');
+const SCHEMA_DIR = join(__dirname, '..', 'eq-platform', 'packages', 'eq-schemas', 'src', 'schemas');
 const files = readdirSync(SCHEMA_DIR).filter((f) => f.endsWith('.schema.json'));
 
 if (files.length === 0) {
