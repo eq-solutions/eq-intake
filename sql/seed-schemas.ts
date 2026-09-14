@@ -2,16 +2,10 @@
  * Seed eq_schema_registry from the canonical schema files.
  *
  * Run from the eq-solves-intake repo root:
- *   pnpm tsx sql/seed-schemas.ts
+ *   npm run seed:schemas
  *
- * NOTE (2026-09-15): the above doesn't actually work today — this file
- * imports @supabase/supabase-js, but no package.json in eq-platform's
- * workspace declares it as a dependency, and eq-solves-intake has no root
- * package.json/node_modules of its own either. The SCHEMA_DIR path below is
- * correct for this file's current location; the missing-dependency problem
- * is separate and unresolved. See eq-platform/scripts/db-apply.ts for the
- * currently-wired alternative (generates SQL to paste into the Supabase SQL
- * editor rather than writing via the JS client directly).
+ * (needs the repo-root package.json's own node_modules — eq-platform is a
+ * sibling of sql/, not an ancestor, so its dependencies never resolve here)
  *
  * Reads every *.schema.json from eq-platform/packages/eq-schemas/src/schemas/,
  * then upserts into eq_schema_registry, marking the latest version of each

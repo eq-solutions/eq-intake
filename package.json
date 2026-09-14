@@ -1,0 +1,15 @@
+{
+  "name": "eq-solves-intake",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone tooling for sql/ and scripts/ that sits outside the eq-platform pnpm workspace (eq-platform/ is a sibling, not an ancestor, of these directories, so its dependencies never resolve here).",
+  "scripts": {
+    "seed:schemas": "tsx sql/seed-schemas.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.106.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}
