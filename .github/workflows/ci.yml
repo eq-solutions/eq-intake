@@ -74,3 +74,35 @@ jobs:
         run: pnpm test:integration
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+  schema-sync:
+    name: Canonical schema sync (root vs eq-platform)
+    # Independent of build-test: root schemas/ isn't part of the eq-platform
+    # pnpm workspace, and this check is a plain Node script with no deps, so
+    # it doesn't need pnpm install or eq-platform's working-directory default.
+    #
+    # What this catches that pnpm ci:drift (in build-test, above) doesn't:
+    # ci:drift only verifies eq-platform's own generated types/Zod are fresh
+    # relative to eq-platform/packages/eq-schemas/src/schemas/. It never
+    # compares that directory against root schemas/ — the two are separately
+    # hand-authored and have drifted apart silently 4 times in the 6 days
+    # before this check was added (see schemas/site.schema.json git log).
+    #
+    # Overrides the workflow-level `defaults.run.working-directory: eq-platform`
+    # above back to repo root — build-test's default doesn't apply to this job
+    # automatically, but job scope beats workflow scope, so it must be
+    # overridden explicitly or `node scripts/check-schema-sync.mjs` below
+    # resolves against eq-platform/scripts/, where the script doesn't exist.
+    defaults:
+      run:
+        working-directory: .
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check schemas/ matches eq-platform's vendored copy
+        run: node scripts/check-schema-sync.mjs
