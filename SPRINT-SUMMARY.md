@@ -107,7 +107,7 @@ Key file: `lib/canonical-sync.ts` — `syncAsset`, `syncTestResult`, `syncDefect
 - 034: 5 PPM report RPCs
 - 035: (contains materialized views — **not applied to sks-canonical**, dropped as premature)
 
-**Migration runner:** `scripts/apply-migrations.mjs` — sequential, idempotent, `--dry-run` flag. `pnpm migrate` from the workspace root.
+**Applying migrations:** `sql/` is staging only — NOT self-serve applyable to live tenant planes (CLAUDE.md Rule 2). Numbering is allocated from the live `app_data._eq_migrations` ledger; actual apply goes through eq-shell's `supabase/tenant-migrations/` via `tenant-migrate.yml` (Royce-dispatched). See sql/README.md.
 
 **Derive profiles (12):**
 
@@ -150,14 +150,15 @@ Key file: `lib/canonical-sync.ts` — `syncAsset`, `syncTestResult`, `syncDefect
 
 ## How to apply SQL migrations
 
-```sh
-node scripts/apply-migrations.mjs \
-  --url  $SUPABASE_URL \
-  --key  $SUPABASE_SERVICE_ROLE_KEY
+`sql/` is staging, not a self-serve apply path (CLAUDE.md Rule 2). Author the
+migration here, get it numbered against the live `app_data._eq_migrations`
+ledger (see sql/README.md), then hand it to eq-shell's
+`supabase/tenant-migrations/` lineage via `tenant-migrate.yml`
+(Royce-dispatched) — that's the only writer of the live ledger.
 
-# Dry run:
-node scripts/apply-migrations.mjs --url $URL --key $KEY --dry-run
-
-# From the eq-platform workspace:
-SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... pnpm migrate
-```
+(`scripts/apply-migrations.mjs`, an earlier self-apply tool referenced here,
+was retired 2026-09-15 — it tracked a different, shadow ledger table
+(`app_data.eq_migrations`, no underscore) that eq-shell's drift tooling
+never saw, which is exactly the failure mode Rule 1 exists to prevent.
+Confirmed live on both ehow and zaap: that shadow table was never actually
+created on either — the script never successfully ran.)

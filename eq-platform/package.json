@@ -19,9 +19,7 @@
     "generate:sql": "pnpm --filter @eq/schemas generate:sql",
     "db:apply": "pnpm generate:sql && tsx scripts/db-apply.ts",
     "ci:drift": "pnpm --filter @eq/schemas generate && git diff --exit-code",
-    "test:integration": "pnpm --filter @eq/ai test:integration",
-    "migrate": "node ../scripts/apply-migrations.mjs",
-    "migrate:dry": "node ../scripts/apply-migrations.mjs --dry-run"
+    "test:integration": "pnpm --filter @eq/ai test:integration"
   },
   "devDependencies": {
     "@fontsource/plus-jakarta-sans": "^5.2.8",
