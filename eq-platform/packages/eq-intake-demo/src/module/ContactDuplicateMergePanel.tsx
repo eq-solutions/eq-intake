@@ -61,7 +61,7 @@ function MergePanel({
   // server-side gate (eq_contact_merge_execute requires a recorded 'same' verdict).
   if (item.verdict !== "same") return null;
 
-  // The write-time resolver decided this one on its own (eq-shell 0322) —
+  // The write-time resolver decided this one on its own (eq-shell 0323) —
   // no preview/confirm flow to show, nothing was clicked. retire-not-delete
   // on the record itself is the undo path, same as a human-confirmed merge.
   if (item.auto_merged) {
@@ -455,7 +455,7 @@ export function ContactDuplicateMergePanel({ supabase, canMergeContacts, onDataC
     void reload();
   }, [reload]);
 
-  // Live updates (eq-shell 0322 adds both tables to the Realtime
+  // Live updates (eq-shell 0323 adds both tables to the Realtime
   // publication) — a new flag, or a merge landing from any tab/session
   // (auto or human), reloads the queue on its own. Debounced so a burst of
   // writes triggers one reload, not one per row. If a tenant's Realtime

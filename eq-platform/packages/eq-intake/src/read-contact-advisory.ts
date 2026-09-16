@@ -36,9 +36,9 @@ export interface ContactAdvisoryItem {
   verdict:         ContactVerdict | null;        // latest human/AI verdict, null = undecided
   verdict_note:    string | null;
   decided_at:      string | null;
-  /** True the moment a merge_log row exists for this advisory, human or auto (0322) — authoritative, don't infer from client-tracked state. */
+  /** True the moment a merge_log row exists for this advisory, human or auto (0323) — authoritative, don't infer from client-tracked state. */
   already_merged:  boolean;
-  /** already_merged AND nobody clicked anything — the write-time resolver merged it on its own (0322). */
+  /** already_merged AND nobody clicked anything — the write-time resolver merged it on its own (0323). */
   auto_merged:     boolean;
 }
 
@@ -50,7 +50,7 @@ export interface ContactAdvisorySummary {
   decided:            number;
   recent_days:        number;
   recent_count:       number;
-  /** Count of auto_merged rows within recent_days (0322) — the "N handled automatically" line. */
+  /** Count of auto_merged rows within recent_days (0323) — the "N handled automatically" line. */
   auto_merged_recent: number;
   items:              ContactAdvisoryItem[];
 }
