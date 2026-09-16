@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@eq-solutions/tokens": "github:eq-solutions/eq-design-tokens#v1.3.2",
-    "@eq-solutions/ui": "github:eq-solutions/eq-ui#v1.3.2",
+    "@eq-solutions/ui": "github:eq-solutions/eq-ui#v1.16.6",
     "@eq/ai": "workspace:*",
     "@eq/confirm-ui": "workspace:*",
     "@eq/intake": "workspace:*",
