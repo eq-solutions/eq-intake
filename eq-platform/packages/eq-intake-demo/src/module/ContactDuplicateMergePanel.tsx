@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type JSX } from "react";
+import { useState, useEffect, useCallback, useRef, type JSX } from "react";
 import {
   readContactAdvisory,
   adjudicateContactAdvisory,
@@ -15,6 +15,7 @@ import type {
   ContactMergePreview,
 } from "@eq/intake";
 import type { SupabaseLikeClient } from "../canonical/commit-canonical.js";
+import { Button } from "@eq-solutions/ui/Button";
 
 // ---------------------------------------------------------------------------
 // The write-time contact resolver's adjudication console (eq-shell 0233/0234)
@@ -60,6 +61,17 @@ function MergePanel({
   // server-side gate (eq_contact_merge_execute requires a recorded 'same' verdict).
   if (item.verdict !== "same") return null;
 
+  // The write-time resolver decided this one on its own (eq-shell 0322) —
+  // no preview/confirm flow to show, nothing was clicked. retire-not-delete
+  // on the record itself is the undo path, same as a human-confirmed merge.
+  if (item.auto_merged) {
+    return (
+      <span className="eq-merge-panel__done eq-merge-panel__done--auto">
+        ✓ Handled automatically — no one needed to look at this
+      </span>
+    );
+  }
+
   if (merged) {
     return (
       <span className="eq-merge-panel__done">
@@ -82,25 +94,26 @@ function MergePanel({
           will move into {preview.survivor_name ?? "the survivor contact"}. The other record is retired, not deleted.
         </span>
         {canMerge ? (
-          <button
+          <Button
             type="button"
-            disabled={mergeBusy}
+            size="sm"
+            loading={mergeBusy}
             onClick={onConfirm}
-            className="eq-merge-panel__confirm-btn"
           >
-            {mergeBusy ? "Merging…" : "Confirm merge"}
-          </button>
+            Confirm merge
+          </Button>
         ) : (
           <span className="eq-merge-panel__hint">Ask a manager to confirm this merge</span>
         )}
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           disabled={mergeBusy}
           onClick={onCancelPreview}
-          className="eq-merge-panel__cancel-btn"
         >
           {canMerge ? "Cancel" : "Close"}
-        </button>
+        </Button>
         {mergeErr && <span className="eq-merge-panel__err" role="alert">{mergeErr}</span>}
       </span>
     );
@@ -108,19 +121,27 @@ function MergePanel({
 
   return (
     <span className="eq-merge-panel__actions">
-      <button
+      <Button
         type="button"
-        disabled={previewBusy}
+        variant="secondary"
+        size="sm"
+        loading={previewBusy}
         onClick={onPreview}
         title="See exactly what will move before merging"
-        className="eq-merge-panel__preview-btn"
       >
-        {previewBusy ? "Checking…" : "Preview merge"}
-      </button>
+        Preview merge
+      </Button>
       {mergeErr && <span className="eq-merge-panel__err">{mergeErr}</span>}
     </span>
   );
 }
+
+// Note: the verdict toggle-group (Same person / Different / Unsure below)
+// and the Change-answer/Ask-Claude links stay hand-rolled deliberately —
+// they need a segmented "current selection" + "AI-suggested" highlight
+// treatment @eq-solutions/ui has no component for. Button above is the
+// clean fit for the plain confirm/cancel/preview actions; forcing the
+// toggle group into it would lose the highlight states, not gain consistency.
 
 function ContactAdvisoryPanel({
   summary, onAdjudicate, saving, errors, onAskAi, aiSuggest, aiBusy, aiErr,
@@ -180,7 +201,7 @@ function ContactAdvisoryPanel({
   const hiddenCount = actionableItems.length - VISIBLE_CAP;
 
   const renderRow = (it: ContactAdvisoryItem) => {
-    const canChangeAnswer = it.verdict != null && !merged[it.id];
+    const canChangeAnswer = it.verdict != null && !merged[it.id] && !it.already_merged;
     const showButtons = it.verdict == null || editingId === it.id;
     return (
       <li key={it.id} className="eq-advisory-item">
@@ -195,8 +216,8 @@ function ContactAdvisoryPanel({
           </span>
           {it.verdict && editingId !== it.id && (
             <span className="eq-advisory-item__verdict-note">
-              · you said: {VERDICT_LABEL[it.verdict]}
-              {it.verdict_note ? <> — &ldquo;{it.verdict_note}&rdquo;</> : null}
+              · {it.auto_merged ? "handled automatically" : `you said: ${VERDICT_LABEL[it.verdict]}`}
+              {!it.auto_merged && it.verdict_note ? <> — &ldquo;{it.verdict_note}&rdquo;</> : null}
               {canChangeAnswer && (
                 <button
                   type="button"
@@ -218,7 +239,9 @@ function ContactAdvisoryPanel({
               previewBusy={!!mergePreviewBusy[it.id]}
               mergeBusy={!!mergeBusy[it.id]}
               mergeErr={mergeErrors[it.id]}
-              merged={merged[it.id]}
+              merged={merged[it.id] ?? (it.already_merged && !it.auto_merged
+                ? { survivor_contact_id: "", movedTotal: 0, alreadyMerged: true }
+                : undefined)}
               onPreview={() => onPreviewMerge(it)}
               onCancelPreview={() => onCancelPreviewMerge(it.id)}
               onConfirm={() => onConfirmMerge(it)}
@@ -407,29 +430,81 @@ export function ContactDuplicateMergePanel({ supabase, canMergeContacts, onDataC
   const [mergeErrors,       setMergeErrors]       = useState<Record<string, string>>({});
   const [merged,            setMerged]            = useState<Record<string, { survivor_contact_id: string; movedTotal: number; alreadyMerged?: boolean }>>({});
   const [loading,    setLoading]    = useState(false);
-  const [refreshTick, setRefreshTick] = useState(0);
 
-  useEffect(() => {
+  const reload = useCallback(async () => {
     if (!supabase) return;
-    let cancelled = false;
-    setLoading(true);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
+    setLoading(true);
+    try {
+      const result = await readContactAdvisory(sb);
+      setAdvisory(result);
+    } catch (err) {
+      // Non-fatal — a tenant not yet on migration 0233 has no summary RPC.
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[ContactDuplicateMergePanel] Contact advisory read failed:",
+        err instanceof Error ? err.message : err,
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase]);
 
-    readContactAdvisory(sb)
-      .then((result) => { if (!cancelled) setAdvisory(result); })
-      .catch((err) => {
-        // Non-fatal — a tenant not yet on migration 0233 has no summary RPC.
-        // eslint-disable-next-line no-console
-        console.warn(
-          "[ContactDuplicateMergePanel] Contact advisory read failed:",
-          err instanceof Error ? err.message : err,
-        );
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
-    return () => { cancelled = true; };
-  }, [supabase, refreshTick]);
+  // Live updates (eq-shell 0322 adds both tables to the Realtime
+  // publication) — a new flag, or a merge landing from any tab/session
+  // (auto or human), reloads the queue on its own. Debounced so a burst of
+  // writes triggers one reload, not one per row. If a tenant's Realtime
+  // isn't wired up yet this is a no-op — mount + focus refresh below still
+  // cover it, same as before this migration.
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!supabase) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    // Defensive: a mock/partial client (the standalone demo playground) or
+    // an older supabase-js build may not expose .channel at all. Same
+    // fail-safe posture as everything else here — no realtime is a no-op,
+    // never an uncaught render-breaking error. Mount + focus refresh above
+    // still cover it either way.
+    if (typeof sb.channel !== "function") return;
+
+    const debouncedReload = () => {
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+      reloadTimer.current = setTimeout(() => { void reload(); }, 400);
+    };
+
+    let channel: { unsubscribe?: () => void } | undefined;
+    try {
+      channel = sb
+        .channel("contact-duplicate-merge-panel")
+        .on("postgres_changes", { event: "INSERT", schema: "app_data", table: "contact_resolution_advisory" }, debouncedReload)
+        .on("postgres_changes", { event: "INSERT", schema: "app_data", table: "contact_resolution_merge_log" }, debouncedReload)
+        .subscribe();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[ContactDuplicateMergePanel] realtime subscribe failed, falling back to mount/focus refresh:", err instanceof Error ? err.message : err);
+      return;
+    }
+
+    return () => {
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+      try { sb.removeChannel?.(channel); } catch { /* best-effort cleanup */ }
+    };
+  }, [supabase, reload]);
+
+  // Safety net for a missed/dropped realtime event — refresh when the tab
+  // regains focus, same pattern most live dashboards use. No visible
+  // button for this; "watching" below is the only UI for it.
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible") void reload(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [reload]);
 
   const handleAdjudicate = useCallback(
     async (advisoryId: string, verdict: ContactVerdict, note?: string) => {
@@ -599,11 +674,20 @@ export function ContactDuplicateMergePanel({ supabase, canMergeContacts, onDataC
       <div className="eq-queue__section-header">
         <h3>Possible duplicate contacts</h3>
         <span className="eq-queue__section-count">{advisory.total}</span>
+        <span className="eq-queue__watching" title="Updates live as data is written — no refresh needed">
+          <span className="eq-queue__watching-dot" aria-hidden="true" />
+          {loading ? "updating…" : "watching"}
+        </span>
       </div>
       <p className="eq-queue__section-hint">
-        Caught automatically as data was written. Say same or different, then merge if you have access —
+        Clear matches merge on their own. You only see the ones we&rsquo;re not sure about —
         the other record is retired, not deleted.
       </p>
+      {advisory.auto_merged_recent > 0 && (
+        <p className="eq-queue__auto-merged-strip">
+          ✓ {advisory.auto_merged_recent} handled automatically in the last {advisory.recent_days} days
+        </p>
+      )}
       <ContactAdvisoryPanel
         summary={advisory}
         onAdjudicate={handleAdjudicate}
@@ -623,15 +707,6 @@ export function ContactDuplicateMergePanel({ supabase, canMergeContacts, onDataC
         onCancelPreviewMerge={handleCancelPreviewMerge}
         onConfirmMerge={handleConfirmMerge}
       />
-      <button
-        type="button"
-        className="eq-intake-btn-ghost"
-        style={{ marginTop: 8 }}
-        onClick={() => setRefreshTick((t) => t + 1)}
-        disabled={loading}
-      >
-        {loading ? "Refreshing…" : "↻ Refresh"}
-      </button>
     </div>
   );
 }

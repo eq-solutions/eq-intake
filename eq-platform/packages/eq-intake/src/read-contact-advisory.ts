@@ -36,17 +36,23 @@ export interface ContactAdvisoryItem {
   verdict:         ContactVerdict | null;        // latest human/AI verdict, null = undecided
   verdict_note:    string | null;
   decided_at:      string | null;
+  /** True the moment a merge_log row exists for this advisory, human or auto (0322) — authoritative, don't infer from client-tracked state. */
+  already_merged:  boolean;
+  /** already_merged AND nobody clicked anything — the write-time resolver merged it on its own (0322). */
+  auto_merged:     boolean;
 }
 
 export interface ContactAdvisorySummary {
-  total:        number;
-  matches:      number;
-  ambiguous:    number;
-  pending:      number;
-  decided:      number;
-  recent_days:  number;
-  recent_count: number;
-  items:        ContactAdvisoryItem[];
+  total:              number;
+  matches:            number;
+  ambiguous:          number;
+  pending:            number;
+  decided:            number;
+  recent_days:        number;
+  recent_count:       number;
+  /** Count of auto_merged rows within recent_days (0322) — the "N handled automatically" line. */
+  auto_merged_recent: number;
+  items:              ContactAdvisoryItem[];
 }
 
 export interface ContactAdjudicateResult {
@@ -58,7 +64,7 @@ export interface ContactAdjudicateResult {
 
 const EMPTY: ContactAdvisorySummary = {
   total: 0, matches: 0, ambiguous: 0, pending: 0, decided: 0,
-  recent_days: 7, recent_count: 0, items: [],
+  recent_days: 7, recent_count: 0, auto_merged_recent: 0, items: [],
 };
 
 // ---------------------------------------------------------------------------
@@ -80,14 +86,15 @@ export async function readContactAdvisory(
 
   const d = data as Partial<ContactAdvisorySummary>;
   return {
-    total:        d.total        ?? 0,
-    matches:      d.matches      ?? 0,
-    ambiguous:    d.ambiguous    ?? 0,
-    pending:      d.pending      ?? 0,
-    decided:      d.decided      ?? 0,
-    recent_days:  d.recent_days  ?? (opts?.days ?? 7),
-    recent_count: d.recent_count ?? 0,
-    items:        Array.isArray(d.items) ? d.items : [],
+    total:              d.total              ?? 0,
+    matches:            d.matches            ?? 0,
+    ambiguous:          d.ambiguous          ?? 0,
+    pending:            d.pending            ?? 0,
+    decided:            d.decided            ?? 0,
+    recent_days:        d.recent_days        ?? (opts?.days ?? 7),
+    recent_count:       d.recent_count       ?? 0,
+    auto_merged_recent: d.auto_merged_recent ?? 0,
+    items:              Array.isArray(d.items) ? d.items : [],
   };
 }
 
