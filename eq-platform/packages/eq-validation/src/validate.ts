@@ -105,6 +105,11 @@ export type Flag =
   | { kind: 'value_unusual'; field: string; reason: string }
   | { kind: 'cross_field_warning'; rule_id: string; message: string }
   | { kind: 'phone_kept_raw'; field: string }
+  // Schema-hinted field (x-eq-multi-value) whose raw source cell looks like
+  // 2+ delimited values (e.g. "Wollongong, Malabar") rather than one.
+  // Advisory only: canonical keeps the raw joined string — nothing splits
+  // until the confirm-flow driver sees a split_row resolution for this row.
+  | { kind: 'multi_value_candidate'; field: string; values: string[] }
   // Attached post-validation by the confirm-flow driver, not by validate()
   // itself: an AI-suggested value for a field the source left empty.
   | { kind: 'ai_enrichment'; field: string; suggested: unknown; confidence: number; reason: string }
@@ -236,6 +241,15 @@ export async function validate(opts: ValidateOpts): Promise<ValidationResult> {
       // Sensitive field flag
       if (fieldSchema['x-eq-sensitive']) {
         flags.push({ kind: 'sensitive_field', field: canonField });
+      }
+
+      // Multi-value candidate — see the Flag type's own comment for why this
+      // stays advisory (flag only) rather than splitting here.
+      if (fieldSchema['x-eq-multi-value'] && typeof rawValue === 'string') {
+        const segments = rawValue.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
+        if (segments.length >= 2) {
+          flags.push({ kind: 'multi_value_candidate', field: canonField, values: segments });
+        }
       }
     }
 

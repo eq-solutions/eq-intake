@@ -134,6 +134,8 @@ function flagSummary(f: Flag): string {
       return `Cross-field warning: ${f.message}`;
     case "phone_kept_raw":
       return `Phone on '${f.field}' could not be normalised — kept raw`;
+    case "multi_value_candidate":
+      return `Looks like ${f.values.length} values in '${f.field}': ${f.values.join(", ")}`;
     case "ai_enrichment":
       return `AI suggestion for '${f.field}' (${Math.round(f.confidence * 100)}% confidence)`;
     case "duplicate":
@@ -342,6 +344,41 @@ function ResolutionPicker(props: {
         <button
           type="button"
           onClick={() => props.onChange({ kind: "skip_row" })}
+        >
+          Skip
+        </button>
+      </div>
+    );
+  }
+
+  const multiValue = props.flags.find((f) => f.kind === "multi_value_candidate");
+  if (multiValue && multiValue.kind === "multi_value_candidate") {
+    return (
+      <div className="eq-resolution">
+        <button
+          type="button"
+          onClick={() =>
+            props.onChange({
+              kind: "split_row",
+              field: multiValue.field,
+              values: multiValue.values,
+            })
+          }
+          aria-pressed={props.current?.kind === "split_row"}
+        >
+          Split into {multiValue.values.length} rows ({multiValue.values.join(" / ")})
+        </button>
+        <button
+          type="button"
+          onClick={() => props.onChange({ kind: "accept_canonical" })}
+          aria-pressed={props.current?.kind === "accept_canonical"}
+        >
+          Keep as one
+        </button>
+        <button
+          type="button"
+          onClick={() => props.onChange({ kind: "skip_row" })}
+          aria-pressed={props.current?.kind === "skip_row"}
         >
           Skip
         </button>
