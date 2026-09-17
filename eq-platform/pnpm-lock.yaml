@@ -169,8 +169,8 @@ importers:
         specifier: github:eq-solutions/eq-design-tokens#v1.3.2
         version: https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/7ad0b3556344ecf5db678da0916bb049545fb259
       '@eq-solutions/ui':
-        specifier: github:eq-solutions/eq-ui#v1.3.2
-        version: https://codeload.github.com/eq-solutions/eq-ui/tar.gz/2935b73cdf69c686138d790e4bc799e113cc0da0(@eq-solutions/tokens@https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/7ad0b3556344ecf5db678da0916bb049545fb259)(lucide-react@1.16.0(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: github:eq-solutions/eq-ui#v1.16.6
+        version: https://codeload.github.com/eq-solutions/eq-ui/tar.gz/a6f6c1c02bd4cb96776c14e67b446a81fca73e74(@eq-solutions/tokens@https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/7ad0b3556344ecf5db678da0916bb049545fb259)(lucide-react@1.16.0(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@eq/ai':
         specifier: workspace:*
         version: link:../eq-ai
@@ -440,9 +440,9 @@ packages:
     version: 1.3.2
     engines: {node: '>=18'}
 
-  '@eq-solutions/ui@https://codeload.github.com/eq-solutions/eq-ui/tar.gz/2935b73cdf69c686138d790e4bc799e113cc0da0':
-    resolution: {tarball: https://codeload.github.com/eq-solutions/eq-ui/tar.gz/2935b73cdf69c686138d790e4bc799e113cc0da0}
-    version: 1.3.2
+  '@eq-solutions/ui@https://codeload.github.com/eq-solutions/eq-ui/tar.gz/a6f6c1c02bd4cb96776c14e67b446a81fca73e74':
+    resolution: {tarball: https://codeload.github.com/eq-solutions/eq-ui/tar.gz/a6f6c1c02bd4cb96776c14e67b446a81fca73e74}
+    version: 1.16.6
     engines: {node: '>=18'}
     peerDependencies:
       '@eq-solutions/tokens': '>=1.3.1'
@@ -2210,7 +2210,7 @@ snapshots:
 
   '@eq-solutions/tokens@https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/7ad0b3556344ecf5db678da0916bb049545fb259': {}
 
-  '@eq-solutions/ui@https://codeload.github.com/eq-solutions/eq-ui/tar.gz/2935b73cdf69c686138d790e4bc799e113cc0da0(@eq-solutions/tokens@https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/7ad0b3556344ecf5db678da0916bb049545fb259)(lucide-react@1.16.0(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@eq-solutions/ui@https://codeload.github.com/eq-solutions/eq-ui/tar.gz/a6f6c1c02bd4cb96776c14e67b446a81fca73e74(@eq-solutions/tokens@https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/7ad0b3556344ecf5db678da0916bb049545fb259)(lucide-react@1.16.0(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@eq-solutions/tokens': https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/7ad0b3556344ecf5db678da0916bb049545fb259
       lucide-react: 1.16.0(react@19.2.8)
