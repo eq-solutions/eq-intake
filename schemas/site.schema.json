@@ -39,6 +39,7 @@
       "type": "string",
       "description": "Display name. Required.",
       "x-eq-source-aliases": ["site_name", "location", "location_name", "project_name", "site"],
+      "x-eq-multi-value": true,
       "minLength": 1,
       "maxLength": 200
     },
