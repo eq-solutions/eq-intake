@@ -22,6 +22,7 @@ import { describe, it, expect } from "vitest";
 import {
   commitBundleToCanonical,
   inferMapping,
+  previewMultiValueCandidates,
   type SupabaseLikeClient,
   type StageCommitFn,
 } from "../src/canonical/commit-canonical.js";
@@ -445,6 +446,72 @@ describe("commitBundleToCanonical — flagged rows carry field + recordId (Fix/S
     const staffResult = result.perEntity.find((r) => r.entity === "staff");
     expect(staffResult?.flaggedRows.length).toBeGreaterThan(0);
     expect(staffResult?.flaggedRows[0]?.recordId).toBeUndefined();
+  });
+});
+
+describe("previewMultiValueCandidates", () => {
+  const sheet = (rows: Record<string, unknown>[], headerRow = ["Site Name"]) => ({
+    sheetName: "csv",
+    headerRow,
+    rows,
+    meta: {
+      encoding: "utf-8", delimiter: ",", totalRows: rows.length,
+      emptyRowsSkipped: 0, malformedRows: 0, malformed: [], bomDetected: false,
+    },
+  });
+
+  it("flags a comma-joined site name against the real site schema", () => {
+    const candidates = previewMultiValueCandidates(
+      sheet([{ "Site Name": "Wollongong, Malabar" }, { "Site Name": "Single Site" }]) as never,
+      "site",
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({ field: "name", sourceColumn: "Site Name", affectedRowCount: 1 });
+    expect(candidates[0]?.sampleValues).toEqual(["Wollongong, Malabar"]);
+  });
+
+  it("never fires on a field with no x-eq-multi-value hint — a comma in a legal name is not a split", () => {
+    const candidates = previewMultiValueCandidates(
+      sheet([{ "Company Name": "Acme, Inc" }], ["Company Name"]) as never,
+      "customer",
+    );
+    expect(candidates).toEqual([]);
+  });
+
+  it("returns nothing when no cell actually has 2+ segments", () => {
+    expect(previewMultiValueCandidates(sheet([{ "Site Name": "Wollongong" }]) as never, "site")).toEqual([]);
+  });
+});
+
+describe("commitBundleToCanonical — multi_value_candidate flag", () => {
+  it("flags a comma-joined site name with a readable message, and still commits it as one row", async () => {
+    const state: MockState = { rpcCalls: [] };
+    const supabase = makeMockSupabase(state);
+
+    const SITE_SHEET = {
+      sheetName: "csv",
+      headerRow: ["Site Name"],
+      rows: [{ "Site Name": "Wollongong, Malabar" }],
+      meta: {
+        encoding: "utf-8", delimiter: ",", totalRows: 1,
+        emptyRowsSkipped: 0, malformedRows: 0, malformed: [], bomDetected: false,
+      },
+    };
+
+    const result = await commitBundleToCanonical({
+      supabase,
+      bundle: { site: SITE_SHEET as never },
+      tenantId: TENANT,
+    });
+
+    const siteResult = result.perEntity.find((r) => r.entity === "site");
+    expect(siteResult).toBeDefined();
+    expect(siteResult?.flaggedCount).toBeGreaterThan(0);
+    expect(siteResult?.flaggedRows[0]?.reasons.join(" ")).toMatch(/looks like 2 separate values/i);
+    // "Flag for review, never silent" means visible, not blocked — the row
+    // still commits as one merged value, same fallback @eq/confirm-ui uses
+    // for an unresolved split_row flag.
+    expect(siteResult?.committedCount).toBe(1);
   });
 });
 

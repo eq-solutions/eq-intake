@@ -13,10 +13,11 @@
  * Per INTAKE-REDESIGN-SPEC.md §5.2 / the 2026-08-17 build spec's state B.
  */
 
-import { useState, type JSX } from "react";
+import { useMemo, useState, type JSX } from "react";
 import type { FileSlot } from "./intake-bundle.js";
 import type { RoleName } from "../rollup/roles.js";
 import { entityLabel } from "./entity-label.js";
+import { previewMultiValueCandidates, type MultiValueCandidate } from "../canonical/commit-canonical.js";
 
 const ALL_ROLES: RoleName[] = ["customer", "contact", "site", "staff"];
 
@@ -41,13 +42,31 @@ export function DetectionLine({ slot, onPick }: DetectionLineProps): JSX.Element
     onPick(role);
   };
 
+  // Informational only (no gate here — CommitView is where "Save into EQ"
+  // actually blocks on this, via shared/precommit-warnings.ts). Computed
+  // whenever the sheet or its resolved role changes, not on every render.
+  const multiValueCandidates = useMemo(
+    () =>
+      slot.sheet && slot.role !== "unknown"
+        ? previewMultiValueCandidates(slot.sheet, slot.role)
+        : [],
+    [slot.sheet, slot.role],
+  );
+  const withWarnings = (tier: JSX.Element): JSX.Element =>
+    multiValueCandidates.length === 0 ? tier : (
+      <>
+        {tier}
+        <MultiValueWarning candidates={multiValueCandidates} />
+      </>
+    );
+
   if (slot.error || slot.role === "unknown" || !slot.sheet) return null;
 
   const confident = slot.method === "heuristic" && !overriding;
 
   if (confident) {
     const n = slot.sheet.rows.length;
-    return (
+    return withWarnings(
       <div className="eq-detect eq-detect--confident">
         <span className="eq-detect__icon eq-detect__icon--ok">✓</span>
         <span>
@@ -56,7 +75,7 @@ export function DetectionLine({ slot, onPick }: DetectionLineProps): JSX.Element
         <button type="button" className="eq-detect__change" onClick={() => setOverriding(true)}>
           Change
         </button>
-      </div>
+      </div>,
     );
   }
 
@@ -74,7 +93,7 @@ export function DetectionLine({ slot, onPick }: DetectionLineProps): JSX.Element
   if (closeCall) {
     const a = top[0] as RoleName;
     const b = second[0] as RoleName;
-    return (
+    return withWarnings(
       <div className="eq-detect eq-detect--closecall">
         <div className="eq-detect__row">
           <span className="eq-detect__icon eq-detect__icon--ok">✓</span>
@@ -90,17 +109,38 @@ export function DetectionLine({ slot, onPick }: DetectionLineProps): JSX.Element
             {entityLabel(b)}
           </button>
         </div>
-      </div>
+      </div>,
     );
   }
 
-  return (
+  return withWarnings(
     <div className="eq-detect eq-detect--unsure">
       <div className="eq-detect__row">
         <span className="eq-detect__icon eq-detect__icon--unsure">?</span>
         <span>We couldn't place this one — what is it?</span>
       </div>
       <UnsurePicker onPick={handlePick} />
+    </div>,
+  );
+}
+
+function MultiValueWarning({ candidates }: { candidates: MultiValueCandidate[] }): JSX.Element {
+  return (
+    <div className="eq-detect eq-detect--multivalue" role="alert">
+      {candidates.map((c) => {
+        const n = c.affectedRowCount;
+        const examples = c.sampleValues.slice(0, 2).join("; ");
+        return (
+          <div key={c.field} className="eq-detect__row">
+            <span className="eq-detect__icon eq-detect__icon--unsure">⚠</span>
+            <span>
+              {n} row{n === 1 ? "" : "s"} in '{c.sourceColumn}' look{n === 1 ? "s" : ""} like more than
+              one value (e.g. {examples}). They'll save as one combined value unless you fix the source
+              file first.
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
