@@ -240,3 +240,75 @@ describe("parseXlsx → @eq/validation smoke test", () => {
     expect(result.summary.rejected).toBe(0);
   });
 });
+
+describe("parseXlsx — comma-joined multi-value cell (regression)", () => {
+  // Real-world shape confirmed against a hand-maintained client register
+  // (comma-joined suburb names in one "Sites" cell, e.g. "Wollongong,
+  // Malabar"). The reader has no concept of splitting a cell into multiple
+  // records — and shouldn't: it doesn't know which column feeds a
+  // splittable canonical field until classify+map run. This locks in that
+  // the raw joined string passes through unchanged; @eq/validation's
+  // x-eq-multi-value detection (see multi-value-candidate.test.ts) is what
+  // catches it downstream.
+  it("passes a comma-joined cell through as one unsplit string", async () => {
+    const buf = await buildXlsx([
+      {
+        name: "Client List",
+        rows: [
+          ["Client", "Sites"],
+          ["Acme Pty Ltd", "Wollongong, Malabar"],
+          ["Beta Co", "Artarmon, Alexandria"],
+        ],
+      },
+    ]);
+
+    const wb = await parseXlsx(buf);
+    const sheet = wb.sheets[0]!;
+
+    expect(sheet.rows).toHaveLength(2);
+    expect(sheet.rows[0]!.Sites).toBe("Wollongong, Malabar");
+    expect(sheet.rows[1]!.Sites).toBe("Artarmon, Alexandria");
+  });
+
+  it("validate() flags the unsplit cell as a multi_value_candidate on a hinted field", async () => {
+    const buf = await buildXlsx([
+      {
+        name: "Client List",
+        rows: [
+          ["Client", "Sites"],
+          ["Acme Pty Ltd", "Wollongong, Malabar"],
+        ],
+      },
+    ]);
+    const wb = await parseXlsx(buf);
+    const sheet = wb.sheets[0]!;
+
+    const MINIMAL_SITE_SCHEMA = {
+      $id: "https://schemas.eq.solutions/test/site-minimal.json",
+      type: "object",
+      "x-eq-entity": "site",
+      properties: {
+        client_name: { type: "string", maxLength: 200 },
+        name: { type: "string", maxLength: 200, "x-eq-multi-value": true },
+      },
+      required: ["client_name", "name"],
+    };
+
+    const result = await validate({
+      schema: MINIMAL_SITE_SCHEMA,
+      mapping: { Client: "client_name", Sites: "name" },
+      rows: sheet.rows,
+      tenantId: "00000000-0000-4000-8000-000000000001",
+    });
+
+    expect(result.summary.rejected).toBe(0);
+    const row = result.flagged_rows[0]!;
+    expect(row.canonical.name).toBe("Wollongong, Malabar");
+    const flag = row.flags.find((f) => f.kind === "multi_value_candidate");
+    expect(flag).toBeDefined();
+    if (flag?.kind === "multi_value_candidate") {
+      expect(flag.field).toBe("name");
+      expect(flag.values).toEqual(["Wollongong", "Malabar"]);
+    }
+  });
+});

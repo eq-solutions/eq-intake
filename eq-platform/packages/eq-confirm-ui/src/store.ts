@@ -611,6 +611,21 @@ export function computeCommitReady(state: FlowState): CommitReady {
       skipped.push(f.source_row_index);
       continue;
     }
+    if (res.kind === "split_row") {
+      // The only point in the pipeline where row count actually changes —
+      // ValidationResult/source_row_index upstream stay exactly 1:1 with the
+      // source file. Every split sibling keeps the original source_row_index
+      // (so it still traces back to the right spreadsheet row) and picks up
+      // split_index to disambiguate.
+      res.values.forEach((value, i) => {
+        committable.push({
+          source_row_index: f.source_row_index,
+          split_index: i,
+          canonical: { ...f.canonical, [res.field]: value },
+        });
+      });
+      continue;
+    }
     const canonical = applyResolution(f.canonical, f.flags, res);
     committable.push({
       source_row_index: f.source_row_index,
@@ -650,7 +665,7 @@ function applyResolution(
     }
     return canonical;
   }
-  // create_missing_fk + skip_row handled by the orchestrator at commit time
+  // create_missing_fk + skip_row + split_row handled by the orchestrator at commit time
   return canonical;
 }
 
@@ -768,12 +783,21 @@ export function buildCommittedCsv(
     for (const k of Object.keys(row.canonical)) fieldSet.add(k);
   }
   const fields = Array.from(fieldSet);
-  const header = ["source_row_index", ...fields].map(csvEscape).join(",");
+  // split_index only appears when this batch actually has a split in it —
+  // keeps the ordinary (no multi-value split) CSV shape byte-identical to
+  // before for the common case, rather than adding an always-blank column.
+  const hasSplits = ready.committable.some((r) => r.split_index !== undefined);
+  const header = [
+    "source_row_index",
+    ...(hasSplits ? ["split_index"] : []),
+    ...fields,
+  ].map(csvEscape).join(",");
 
   const lines = [header];
   for (const row of ready.committable) {
     const cells = [
       String(row.source_row_index),
+      ...(hasSplits ? [row.split_index === undefined ? "" : String(row.split_index)] : []),
       ...fields.map((f) => stringifyCell(row.canonical[f])),
     ].map(csvEscape);
     lines.push(cells.join(","));

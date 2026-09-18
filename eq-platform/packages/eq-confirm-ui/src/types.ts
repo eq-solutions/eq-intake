@@ -45,7 +45,8 @@ export type FlagResolution =
   | { kind: "set_value"; field: string; value: unknown } // override a value
   | { kind: "set_fields"; values: Record<string, unknown> } // set several fields (e.g. accepted AI suggestions)
   | { kind: "skip_row" } // drop this row from the commit
-  | { kind: "create_missing_fk"; field: string; newName: string }; // create-new flow
+  | { kind: "create_missing_fk"; field: string; newName: string } // create-new flow
+  | { kind: "split_row"; field: string; values: string[] }; // confirmed multi_value_candidate: fan this row into one record per value
 
 /** Commit function signature — caller wires this to their Supabase RPC. */
 export type CommitFn = (rows: CommittableRow[]) => Promise<{
@@ -55,6 +56,12 @@ export type CommitFn = (rows: CommittableRow[]) => Promise<{
 
 export interface CommittableRow {
   source_row_index: number;
+  /**
+   * Set when this row was produced by fanning one multi-value source row out
+   * into several (a confirmed split_row resolution) — 0-based position within
+   * that split group. Absent for every ordinary (non-split) row.
+   */
+  split_index?: number;
   canonical: Record<string, unknown>;
 }
 
