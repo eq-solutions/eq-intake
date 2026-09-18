@@ -134,6 +134,18 @@ export interface CommitOptions {
   supabase: SupabaseLikeClient;
   bundle: BundleSheets;
   tenantId: string;
+  /**
+   * The user to stamp as created_by on every intake event. Required from
+   * hosts whose SupabaseLikeClient never populates a real Supabase Auth
+   * session — e.g. EQ Shell's tenant-data clients, which carry identity via
+   * a manually-injected bearer JWT instead of supabase.auth.setSession()
+   * (see eq-shell's connectTenantClient.ts). On those clients,
+   * supabase.auth.getUser() always resolves to "no session", never a real
+   * user, regardless of tenant or whether the caller is actually signed in.
+   * When omitted, falls back to supabase.auth.getUser() — which is what the
+   * standalone demo's mock client satisfies.
+   */
+  createdBy?: string;
   /** Filename to surface in eq_intake_events.source_filename — for the audit. */
   sourceFilename?: string;
   /** Override schemas — useful for testing. Production callers pass nothing. */
@@ -891,9 +903,15 @@ async function commitOneEntity(args: CommitOneEntityArgs): Promise<EntityCommitR
 // Public entry point
 // ---------------------------------------------------------------------------
 
-export async function commitBundleToCanonical(opts: CommitOptions): Promise<CommitResult> {
-  // Resolve the auth user once — used as created_by on every intake event.
-  const userResp = await opts.supabase.auth.getUser();
+/**
+ * Fallback for hosts that don't supply CommitOptions.createdBy — resolves the
+ * current user from the Supabase client's own Auth session. Only works when
+ * that client actually has one (e.g. the demo's mock client, which fakes
+ * auth.getUser() unconditionally); EQ Shell's real tenant-data clients never
+ * do, so EQ Shell must always supply createdBy explicitly instead.
+ */
+async function resolveCreatedByFromAuthSession(supabase: SupabaseLikeClient): Promise<string> {
+  const userResp = await supabase.auth.getUser();
   if (userResp.error || !userResp.data.user) {
     throw new Error(
       `Cannot commit canonical without an authenticated user: ${
@@ -901,7 +919,15 @@ export async function commitBundleToCanonical(opts: CommitOptions): Promise<Comm
       }`,
     );
   }
-  const createdBy = userResp.data.user.id;
+  return userResp.data.user.id;
+}
+
+export async function commitBundleToCanonical(opts: CommitOptions): Promise<CommitResult> {
+  // Resolve the user to stamp as created_by on every intake event. Hosts
+  // whose SupabaseLikeClient carries identity via a bearer header instead of
+  // a real Supabase Auth session (see CommitOptions.createdBy) must supply it
+  // explicitly — auth.getUser() on those clients can never resolve a user.
+  const createdBy = opts.createdBy ?? (await resolveCreatedByFromAuthSession(opts.supabase));
 
   const perEntity: EntityCommitResult[] = [];
   let customerIdMap: Map<string, string> | undefined;

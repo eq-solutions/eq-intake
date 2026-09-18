@@ -29,6 +29,8 @@ import { entityLabel } from "../shared/entity-label.js";
 export interface ReconcileModuleProps {
   supabase?: SupabaseLikeClient | null;
   tenantId?: string;
+  /** Forwarded from IntakeModuleProps.createdBy — see CommitOptions.createdBy. */
+  createdBy?: string;
   /**
    * Skip the drop zone and reconcile this already-classified sheet directly —
    * used when invoked per-slot from Bring Data In (which already parsed +
@@ -71,7 +73,7 @@ function normaliseRow(entity: string, row: Record<string, unknown>): Record<stri
   return r;
 }
 
-export function ReconcileModule({ supabase, tenantId, initialSlot, onClose }: ReconcileModuleProps): JSX.Element {
+export function ReconcileModule({ supabase, tenantId, createdBy, initialSlot, onClose }: ReconcileModuleProps): JSX.Element {
   const [step, setStep] = useState<Step>({ tag: "idle" });
   const [resolutions, setResolutions] = useState<Map<number, Resolution>>(new Map());
   const finish = onClose ?? (() => { setStep({ tag: "idle" }); setResolutions(new Map()); });
@@ -232,6 +234,7 @@ export function ReconcileModule({ supabase, tenantId, initialSlot, onClose }: Re
         supabase,
         bundle: bundle as Parameters<typeof commitBundleToCanonical>[0]["bundle"],
         tenantId: tenantId ?? DEFAULT_TENANT_ID,
+        createdBy,
         sourceFilename: sheet.sheetName ?? "reconcile",
       });
 
