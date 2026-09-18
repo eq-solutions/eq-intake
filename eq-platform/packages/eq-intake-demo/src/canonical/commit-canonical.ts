@@ -257,6 +257,70 @@ export function inferMapping(
   return mapping;
 }
 
+export interface MultiValueCandidate {
+  /** Canonical field carrying the schema's x-eq-multi-value hint. */
+  field: string;
+  /** Source column mapped to that field (via the same aliasing inferMapping uses at commit time). */
+  sourceColumn: string;
+  /** Rows whose raw cell for this column looks like 2+ comma-separated values. */
+  affectedRowCount: number;
+  /** A few of the raw (unsplit) cell values, for a review message. */
+  sampleValues: string[];
+}
+
+const MULTI_VALUE_SAMPLE_LIMIT = 3;
+
+/**
+ * Pre-commit scan for likely multi-value cells (e.g. "Wollongong, Malabar" in
+ * a site name column), mirroring @eq/validation's own x-eq-multi-value +
+ * comma-split rule (validate.ts) so IntakeModule can warn before "Save into
+ * EQ" — not just after, when validate() runs for real inside commitOneEntity.
+ *
+ * Deliberately independent of validate() itself: sites/contacts' customer_id
+ * FK isn't resolved yet at this point in the flow (that only happens inside
+ * commitOneEntity, after customers have committed), so a real validate() call
+ * here would misfire fk_no_match on every row just to answer a question that
+ * has no FK dependency at all.
+ */
+export function previewMultiValueCandidates(
+  sheet: ParsedSheet,
+  entity: CanonicalEntity,
+  schemas?: Partial<Record<CanonicalEntity, JsonSchema>>,
+): MultiValueCandidate[] {
+  const schema = schemas?.[entity] ?? CANONICAL_SCHEMAS[entity];
+  const mapping = inferMapping(sheet.headerRow, schema);
+
+  const multiValueFields = new Map<string, string>(); // canonField -> sourceColumn
+  for (const [sourceColumn, canonField] of Object.entries(mapping)) {
+    if (!canonField) continue;
+    if (schema.properties[canonField]?.["x-eq-multi-value"]) {
+      multiValueFields.set(canonField, sourceColumn);
+    }
+  }
+  if (multiValueFields.size === 0) return [];
+
+  const candidates: MultiValueCandidate[] = [];
+  for (const [field, sourceColumn] of multiValueFields) {
+    let affectedRowCount = 0;
+    const sampleValues: string[] = [];
+    for (const row of sheet.rows as Record<string, unknown>[]) {
+      const raw = row[sourceColumn];
+      if (typeof raw !== "string") continue;
+      const segments = raw.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+      if (segments.length >= 2) {
+        affectedRowCount++;
+        if (sampleValues.length < MULTI_VALUE_SAMPLE_LIMIT && !sampleValues.includes(raw)) {
+          sampleValues.push(raw);
+        }
+      }
+    }
+    if (affectedRowCount > 0) {
+      candidates.push({ field, sourceColumn, affectedRowCount, sampleValues });
+    }
+  }
+  return candidates;
+}
+
 // ---------------------------------------------------------------------------
 // Error formatting
 // ---------------------------------------------------------------------------
@@ -304,6 +368,7 @@ function formatFlag(f: {
   message?: string;
   reason?: string;
   candidates?: unknown[];
+  values?: unknown[];
 }): string {
   const where = f.field ? `"${f.field}"` : f.rule_id ? `rule "${f.rule_id}"` : "this row";
   switch (f.kind) {
@@ -319,6 +384,12 @@ function formatFlag(f: {
     }
     case 'value_unusual': return `${where}: ${f.reason ?? 'value looks unusual — check it'}`;
     case 'cross_field_warning': return f.message ?? `warning on ${where}`;
+    case 'multi_value_candidate': {
+      const n = Array.isArray(f.values) ? f.values.length : undefined;
+      return n
+        ? `${where}: looks like ${n} separate values — saved as one combined value for now, edit to split`
+        : `${where}: looks like more than one value — saved as one combined value for now, edit to split`;
+    }
     default: return f.message ? `${where}: ${f.message}` : `${where}: ${f.kind}`;
   }
 }

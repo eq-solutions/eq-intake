@@ -48,6 +48,11 @@ import {
   type CommitResult,
   type StageCommitFn,
 } from "../canonical/commit-canonical.js";
+import {
+  collectPreCommitWarnings,
+  describeWarning,
+  warningsFingerprint,
+} from "../shared/precommit-warnings.js";
 
 export interface IntakeModuleProps {
   /**
@@ -425,9 +430,12 @@ export function IntakeModule(props: IntakeModuleProps): JSX.Element {
 
 // ============================================================================
 // COMMIT VIEW — Into EQ (canonical commit). Save straight through, then
-// ResultPanel + flagged/rejected per-row drill-downs. No pre-commit preview
-// step — matches the build spec's decision #2 ("save, then show the
-// result"); rollback is one click if something's wrong.
+// ResultPanel + flagged/rejected per-row drill-downs — matches the build
+// spec's decision #2 ("save, then show the result"); rollback is one click
+// if something's wrong. The one exception: a shaky classification or a
+// likely multi-value cell (see shared/precommit-warnings.ts) requires an
+// explicit checkbox acknowledgment before Save enables, same bar
+// @eq/confirm-ui's MappingTable already holds its own users to.
 // ============================================================================
 
 type CommitBundle = {
@@ -463,6 +471,18 @@ function CommitView({
   const [progressMsg, setProgressMsg] = useState<string | null>(null);
   const [result, setResult] = useState<CommitResult | null>(null);
   const [sourceFilename, setSourceFilename] = useState("");
+
+  // Pre-commit review gate — shaky classifications and likely multi-value
+  // cells, aggregated across every slot. Mirrors @eq/confirm-ui's
+  // MappingTable checkbox-acknowledgment pattern, since eq-shell's real
+  // intake pipeline never renders MappingTable itself. Re-derived from
+  // bundle.slots every render, so adding/removing/reclassifying a file
+  // always reflects the current set, not a stale snapshot.
+  const warnings = useMemo(() => collectPreCommitWarnings(bundle.slots), [bundle.slots]);
+  const warningsKey = useMemo(() => warningsFingerprint(warnings), [warnings]);
+  const [acknowledgedKey, setAcknowledgedKey] = useState<string | null>(null);
+  const warningsAcknowledged = warnings.length === 0 || acknowledgedKey === warningsKey;
+  const saveBlocked = warnings.length > 0 && !warningsAcknowledged;
 
   const commit = async () => {
     if (!supabase) return;
@@ -539,11 +559,31 @@ function CommitView({
         </div>
       )}
 
+      {!result && warnings.length > 0 && (
+        <div className="eq-intake-precommit-warning" role="alert">
+          <strong>Check these before saving</strong>
+          <ul>
+            {warnings.map((w, i) => (
+              <li key={i}>{describeWarning(w)}</li>
+            ))}
+          </ul>
+          <label className="eq-intake-precommit-warning__ack">
+            <input
+              type="checkbox"
+              checked={warningsAcknowledged}
+              onChange={(e) => setAcknowledgedKey(e.target.checked ? warningsKey : null)}
+            />
+            I've checked these — save anyway.
+          </label>
+        </div>
+      )}
+
       {!result && (
         <button
           type="button"
           onClick={commit}
-          disabled={!enabled || busy}
+          disabled={!enabled || busy || saveBlocked}
+          title={saveBlocked ? "Check the warnings above before saving." : undefined}
           className="eq-intake-btn-primary"
         >
           {busy ? (
