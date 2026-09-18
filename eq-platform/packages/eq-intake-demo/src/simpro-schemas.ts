@@ -33,7 +33,7 @@ export const CUSTOMER_SCHEMA = {
     external_id: {
       type: ["string", "null"],
       description: "Source-system ID (SimPRO Customer ID, MYOB CardID, etc.). Preserved for round-trip exports.",
-      "x-eq-source-aliases": ["simpro_customer_id", "customer_id", "id", "code", "card_id"],
+      "x-eq-source-aliases": ["simpro_customer_id", "customer_id", "client_id", "id", "code", "card_id"],
     },
     type: {
       type: ["string", "null"],
@@ -43,7 +43,7 @@ export const CUSTOMER_SCHEMA = {
     company_name: {
       type: ["string", "null"],
       description: "Trading name / company name. Optional — sole traders have first_name/last_name instead.",
-      "x-eq-source-aliases": ["company_name", "company", "name", "business_name", "trading_name"],
+      "x-eq-source-aliases": ["company_name", "company", "name", "business_name", "trading_name", "client_name", "client"],
       maxLength: 200,
     },
     first_name: {
@@ -143,7 +143,7 @@ export const CUSTOMER_SCHEMA = {
     },
     website: {
       type: ["string", "null"],
-      "x-eq-source-aliases": ["website", "url", "homepage", "site"],
+      "x-eq-source-aliases": ["website", "url", "homepage"],
     },
     customer_group: {
       type: ["string", "null"],
