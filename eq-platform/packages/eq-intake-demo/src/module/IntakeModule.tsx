@@ -62,6 +62,15 @@ export interface IntakeModuleProps {
    */
   tenantId?: string;
   /**
+   * The signed-in user to stamp as created_by on canonical commits — see
+   * CommitOptions.createdBy. Required from EQ Shell: its tenant-data
+   * `supabase` client never carries a real Supabase Auth session (identity
+   * rides a bearer header instead), so commitBundleToCanonical's own
+   * auth.getUser() fallback can never resolve a user there. The standalone
+   * demo omits this — its mock client fakes auth.getUser() instead.
+   */
+  createdBy?: string;
+  /**
    * Optional AI client for the freeform natural language input. When absent
    * the FreeformIntakeInput renders in preview-only mode with a notice.
    */
@@ -362,6 +371,7 @@ export function IntakeModule(props: IntakeModuleProps): JSX.Element {
               <ReconcileModule
                 supabase={props.supabase}
                 tenantId={props.tenantId}
+                createdBy={props.createdBy}
                 initialSlot={{ sheet: reconcileSlot.sheet, entity: reconcileSlot.role }}
                 onClose={() => setReconcileSlot(null)}
               />
@@ -386,6 +396,7 @@ export function IntakeModule(props: IntakeModuleProps): JSX.Element {
                   bundle={bundle}
                   supabase={props.supabase}
                   tenantId={props.tenantId ?? DEFAULT_TENANT_ID}
+                  createdBy={props.createdBy}
                   stageCommit={props.stageCommit}
                   onViewEntity={(entity) => {
                     setDrillEntity(entity);
@@ -431,6 +442,7 @@ function CommitView({
   bundle,
   supabase,
   tenantId,
+  createdBy,
   stageCommit,
   onViewEntity,
   onViewQueue,
@@ -439,6 +451,7 @@ function CommitView({
   bundle: IntakeBundle;
   supabase?: SupabaseLikeClient | null;
   tenantId: string;
+  createdBy?: string;
   stageCommit?: StageCommitFn;
   onViewEntity: (entity: string) => void;
   onViewQueue: () => void;
@@ -489,6 +502,7 @@ function CommitView({
         supabase,
         bundle: commitBundle,
         tenantId,
+        createdBy,
         sourceFilename: filename,
         onProgress: (msg) => setProgressMsg(msg),
         stageCommit,

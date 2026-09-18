@@ -202,6 +202,28 @@ describe("commitBundleToCanonical — auth", () => {
     ).rejects.toThrow(/Cannot commit canonical without an authenticated user/);
     expect(state.rpcCalls).toHaveLength(0);
   });
+
+  it("uses an explicitly-supplied createdBy without ever calling auth.getUser", async () => {
+    // Mirrors EQ Shell's real tenant-data clients: no Supabase Auth session
+    // exists (authUser: null would normally throw — see the test above), but
+    // the host already knows who's signed in and passes it directly.
+    const state: MockState = {
+      rpcCalls: [],
+      authUser: null,
+    };
+    const supabase = makeMockSupabase(state);
+    const result = await commitBundleToCanonical({
+      supabase,
+      bundle: { customer: CUSTOMER_SHEET as never },
+      tenantId: TENANT,
+      createdBy: "shell-session-user-id",
+    });
+    expect(result.bundleSuccess).toBe(true);
+    const createEventCall = state.rpcCalls.find((c) => c.name === "eq_create_intake_event");
+    expect((createEventCall?.params as { p_created_by?: string } | undefined)?.p_created_by).toBe(
+      "shell-session-user-id",
+    );
+  });
 });
 
 describe("commitBundleToCanonical — empty bundle", () => {
