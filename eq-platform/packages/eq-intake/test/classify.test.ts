@@ -202,3 +202,75 @@ describe("classifySheet — edge cases", () => {
     expect(result.confidence).toBeLessThan(0.3);
   });
 });
+
+describe("classifySheet — fuzzy match length guard", () => {
+  // A schema whose only source of "contact"-ish signal is a long compound
+  // alias on an unrelated field — the shape that caused site/service_visit
+  // to falsely crowd out customer for a bare "Contacts" column (Madagins
+  // onboarding misroute, see classify_client_register_misroute memory).
+  const REGISTRY_WITH_COMPOUND_ALIAS: SchemaRegistry = {
+    widget: {
+      "x-eq-entity": "widget",
+      properties: {
+        contact_position: { "x-eq-source-aliases": ["contact_position"] },
+      },
+    },
+    person: {
+      "x-eq-entity": "person",
+      properties: {
+        contact: { "x-eq-source-aliases": ["contact"] },
+      },
+    },
+  };
+
+  it("does not fuzzy-match a short header against a much longer compound alias that merely shares its prefix", async () => {
+    const result = await classifySheet({
+      schemas: REGISTRY_WITH_COMPOUND_ALIAS,
+      sheet: sheet(["Contacts"]),
+    });
+    expect(result.scores.widget).toBe(0);
+  });
+
+  it("still fuzzy-matches a plural header against a near-length singular alias", async () => {
+    const result = await classifySheet({
+      schemas: REGISTRY_WITH_COMPOUND_ALIAS,
+      sheet: sheet(["Contacts"]),
+    });
+    expect(result.scores.person).toBe(1);
+  });
+});
+
+describe("classifySheet — real @eq/schemas corpus (regression fixture)", () => {
+  // eq-solves-intake CLAUDE.md / classify_client_register_misroute memory:
+  // a plain "Clients / Contacts / Sites" client register (customer name /
+  // contact name / site name, one row per client) was scored against the
+  // full canonical schema set and silently misrouted — site, contract_scope
+  // and service_visit all crowded out customer via generic aliases. This
+  // fixture locks in the safe behaviour: genuine multi-entity ambiguity
+  // must surface as ambiguous_fallback, never a confident wrong pick.
+  it("flags a Clients/Contacts/Sites register as ambiguous against the full eq-schemas registry, never confidently wrong", async () => {
+    const { readdirSync, readFileSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+
+    const here = dirname(fileURLToPath(import.meta.url));
+    const schemaDir = join(here, "..", "..", "eq-schemas", "src", "schemas");
+    const registry: SchemaRegistry = {};
+    for (const file of readdirSync(schemaDir).filter((f) => f.endsWith(".schema.json"))) {
+      const schema = JSON.parse(readFileSync(join(schemaDir, file), "utf-8"));
+      const entity = (schema["x-eq-entity"] as string) ?? file.replace(/\.schema\.json$/, "");
+      registry[entity] = schema;
+    }
+
+    const result = await classifySheet({
+      schemas: registry,
+      sheet: sheet(["col_1", "Clients", "Contacts", "Sites"]),
+    });
+
+    // The real bug: this used to come back as method "heuristic" (a
+    // confident, silently wrong pick). A registry this broad genuinely
+    // can't tell customer/contact/site apart from three bare entity-name
+    // headers alone — the safe outcome is surfacing that, not guessing.
+    expect(result.method).not.toBe("heuristic");
+  });
+});

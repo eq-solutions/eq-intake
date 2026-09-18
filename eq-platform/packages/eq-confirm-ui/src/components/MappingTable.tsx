@@ -19,7 +19,7 @@
  * hover tooltip via the native title attribute.
  */
 
-import { useMemo, type JSX } from "react";
+import { useMemo, useState, type JSX } from "react";
 import type { UseBoundStore, StoreApi } from "zustand";
 import type { FlowState } from "../types.js";
 import { DestinationPicker } from "./DestinationPicker.js";
@@ -69,6 +69,11 @@ export function MappingTable(props: MappingTableProps): JSX.Element {
       ? (props.schema["x-eq-entity"] as string)
       : undefined;
   const mismatchWarning = classificationMismatchMessage(classification, targetEntity);
+  // Any classification uncertainty the package can detect must be explicitly
+  // acknowledged before Continue — mirrors the demo UI's close-call/unsure
+  // tiers, which never let an ambiguous result pass through silently.
+  const [warningAcknowledged, setWarningAcknowledged] = useState(false);
+  const continueBlocked = mismatchWarning !== null && !warningAcknowledged;
 
   const fields = useMemo(
     () => buildFieldMeta(props.canonicalFields, props.schema),
@@ -110,6 +115,14 @@ export function MappingTable(props: MappingTableProps): JSX.Element {
         >
           <strong>{mismatchWarning.title}</strong>
           <p>{mismatchWarning.body}</p>
+          <label className="eq-classification-warning__ack">
+            <input
+              type="checkbox"
+              checked={warningAcknowledged}
+              onChange={(e) => setWarningAcknowledged(e.target.checked)}
+            />
+            I've checked this — continue anyway.
+          </label>
         </div>
       ) : null}
       <header className="eq-confirm-mapping__header">
@@ -217,7 +230,17 @@ export function MappingTable(props: MappingTableProps): JSX.Element {
           </button>
         )}
         {props.onContinue && (
-          <button type="button" onClick={props.onContinue} className="eq-primary">
+          <button
+            type="button"
+            onClick={props.onContinue}
+            className="eq-primary"
+            disabled={continueBlocked}
+            title={
+              continueBlocked
+                ? "Check the classification warning above before continuing."
+                : undefined
+            }
+          >
             Continue
           </button>
         )}
@@ -365,7 +388,12 @@ interface MismatchWarning {
  * Logic:
  *   - No classification result yet (no registry configured, or classify
  *     skipped) → no warning.
- *   - Classification matches the target → no warning.
+ *   - Classification matches the target via a decisive heuristic → no warning.
+ *   - Classification matches the target, but only via an AI tie-break or an
+ *     unresolved heuristic tie (method !== "heuristic") → "not fully sure"
+ *     (info). Without this branch, an `ambiguous_fallback` result that
+ *     happens to land on the right entity is indistinguishable from a clean
+ *     heuristic match — the caller sees nothing either way.
  *   - Classification picked something else with confidence ≥ 0.5 →
  *     "this looks like a Y, not X" (warn).
  *   - All scores low (< 0.25) → "couldn't identify this file" (info).
@@ -376,7 +404,18 @@ export function classificationMismatchMessage(
   targetEntity: string | undefined,
 ): MismatchWarning | null {
   if (!classification || !targetEntity) return null;
-  if (classification.entity === targetEntity) return null;
+
+  if (classification.entity === targetEntity) {
+    if (classification.method === "heuristic") return null;
+    return {
+      severity: "info",
+      title: `Not fully sure, but this looks like ${withArticle(targetEntity)} file.`,
+      body:
+        classification.method === "ai"
+          ? `The column names weren't a clear match on their own, so an AI pass was used to decide — it landed on '${targetEntity}' at ${Math.round(classification.confidence * 100)}% confidence. Worth checking the mapping below before continuing.`
+          : `The column names didn't clearly point to one entity (top match '${targetEntity}' at ${Math.round(classification.confidence * 100)}%, no AI provider configured to break the tie). Worth checking the mapping below before continuing.`,
+    };
+  }
 
   if (classification.confidence >= 0.5) {
     return {

@@ -163,11 +163,12 @@ describe("classificationMismatchMessage", () => {
     entity: string,
     confidence: number,
     scores: Record<string, number> = {},
+    method: ClassifyResult["method"] = "heuristic",
   ): ClassifyResult {
     return {
       entity,
       confidence,
-      method: "heuristic",
+      method,
       scores: { [entity]: confidence, ...scores },
       reason: "test",
     };
@@ -222,5 +223,35 @@ describe("classificationMismatchMessage", () => {
       "asset",
     );
     expect(msg?.title).toMatch(/looks like a staff register, not asset/);
+  });
+
+  it("warns when the entity matches but only via an unresolved heuristic tie", () => {
+    // The gap this closes: store.ts's classify() never checks result.method,
+    // so an ambiguous_fallback that happens to land on the right entity was
+    // previously indistinguishable from a clean heuristic match — silence
+    // either way. See classify.ts's own ClassifyResult.method docs.
+    const msg = classificationMismatchMessage(
+      classified("staff", 1, { customer: 1 }, "ambiguous_fallback"),
+      "staff",
+    );
+    expect(msg?.severity).toBe("info");
+    expect(msg?.title).toMatch(/Not fully sure.*looks like a staff file/);
+    expect(msg?.body).toMatch(/no AI provider configured/);
+  });
+
+  it("warns when the entity matches but only via an AI tie-break", () => {
+    const msg = classificationMismatchMessage(
+      classified("staff", 1, { customer: 1 }, "ai"),
+      "staff",
+    );
+    expect(msg?.severity).toBe("info");
+    expect(msg?.title).toMatch(/Not fully sure.*looks like a staff file/);
+    expect(msg?.body).toMatch(/AI pass was used to decide/);
+  });
+
+  it("still returns null for a decisive heuristic match (unchanged behaviour)", () => {
+    expect(
+      classificationMismatchMessage(classified("staff", 0.8, {}, "heuristic"), "staff"),
+    ).toBeNull();
   });
 });

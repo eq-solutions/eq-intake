@@ -173,11 +173,24 @@ function normalise(s: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
+/**
+ * Jaro-Winkler's common-prefix bonus lets a short plural header (e.g.
+ * "Contacts") clear FUZZY_THRESHOLD against a much longer compound alias
+ * that merely starts with the same root (e.g. "contact_position",
+ * "contact_title") even though the two mean unrelated things. Requiring the
+ * shorter string to be a reasonable fraction of the longer one keeps
+ * genuine near-misses (site/sites, client/clients, contact/contacts) while
+ * rejecting those prefix-only collisions.
+ */
+const MIN_FUZZY_LENGTH_RATIO = 0.65;
+
 function matchAny(column: string, targets: Set<string>): boolean {
   const normCol = normalise(column);
   if (targets.has(normCol)) return true;
   // Fuzzy
   for (const t of targets) {
+    const ratio = Math.min(normCol.length, t.length) / Math.max(normCol.length, t.length);
+    if (ratio < MIN_FUZZY_LENGTH_RATIO) continue;
     if (jaroWinkler(normCol, t) >= FUZZY_THRESHOLD) return true;
   }
   return false;
