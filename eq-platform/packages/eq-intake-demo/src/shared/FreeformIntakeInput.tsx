@@ -26,6 +26,10 @@ export interface AiClient {
   complete: (prompt: string) => Promise<string>;
 }
 
+/** Shared with the textarea placeholder so the collapsed-state example (below)
+ * never drifts out of sync with it. */
+const EXAMPLE_TEXT = "Add 5 new customers from Adelaide with site addresses";
+
 export interface FreeformIntakeInputProps {
   /** Optional AI client. When absent the component renders in preview-only
    * mode with a notice explaining AI isn't configured. */
@@ -39,7 +43,7 @@ export interface FreeformIntakeInputProps {
 
 export function FreeformIntakeInput({
   ai,
-  placeholder = "Describe what you'd like to import — e.g. \"Add 5 new customers from Adelaide with site addresses\"",
+  placeholder = `Describe what you'd like to import — e.g. "${EXAMPLE_TEXT}"`,
   onResult,
 }: FreeformIntakeInputProps): JSX.Element {
   const [expanded, setExpanded] = useState(false);
@@ -66,13 +70,16 @@ export function FreeformIntakeInput({
 
   if (!expanded) {
     return (
-      <button
-        type="button"
-        className="eq-freeform-intake__toggle"
-        onClick={() => setExpanded(true)}
-      >
-        Or describe what you want to import
-      </button>
+      <>
+        <button
+          type="button"
+          className="eq-freeform-intake__toggle"
+          onClick={() => setExpanded(true)}
+        >
+          Or describe what you want to import
+        </button>
+        <p className="eq-freeform-intake__example">e.g. "{EXAMPLE_TEXT}"</p>
+      </>
     );
   }
 
