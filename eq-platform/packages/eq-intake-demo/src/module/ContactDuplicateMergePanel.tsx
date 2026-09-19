@@ -15,6 +15,7 @@ import type {
   ContactMergePreview,
 } from "@eq/intake";
 import type { SupabaseLikeClient } from "../canonical/commit-canonical.js";
+import { Button } from "@eq-solutions/ui/Button";
 
 // ---------------------------------------------------------------------------
 // The write-time contact resolver's adjudication console (eq-shell 0233/0234)
@@ -93,25 +94,26 @@ function MergePanel({
           will move into {preview.survivor_name ?? "the survivor contact"}. The other record is retired, not deleted.
         </span>
         {canMerge ? (
-          <button
+          <Button
             type="button"
-            disabled={mergeBusy}
+            size="sm"
+            loading={mergeBusy}
             onClick={onConfirm}
-            className="eq-merge-panel__confirm-btn"
           >
-            {mergeBusy ? "Merging…" : "Confirm merge"}
-          </button>
+            Confirm merge
+          </Button>
         ) : (
           <span className="eq-merge-panel__hint">Ask a manager to confirm this merge</span>
         )}
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           disabled={mergeBusy}
           onClick={onCancelPreview}
-          className="eq-merge-panel__cancel-btn"
         >
           {canMerge ? "Cancel" : "Close"}
-        </button>
+        </Button>
         {mergeErr && <span className="eq-merge-panel__err" role="alert">{mergeErr}</span>}
       </span>
     );
@@ -119,28 +121,27 @@ function MergePanel({
 
   return (
     <span className="eq-merge-panel__actions">
-      <button
+      <Button
         type="button"
-        disabled={previewBusy}
+        variant="secondary"
+        size="sm"
+        loading={previewBusy}
         onClick={onPreview}
         title="See exactly what will move before merging"
-        className="eq-merge-panel__preview-btn"
       >
-        {previewBusy ? "Checking…" : "Preview merge"}
-      </button>
+        Preview merge
+      </Button>
       {mergeErr && <span className="eq-merge-panel__err">{mergeErr}</span>}
     </span>
   );
 }
 
-// Note: @eq-solutions/ui's Button isn't used here — its own source
-// (node_modules/@eq-solutions/ui/src/Button/Button.tsx:1) imports
-// ButtonHTMLAttributes as a value import, which fails eq-shell's
-// verbatimModuleSyntax tsconfig once anything in this vendored path
-// actually imports Button (first hit 2026-09-16, eq-shell run 35144304365).
-// Pre-existing upstream bug, not introduced here — reverted to hand-rolled
-// buttons so this panel isn't blocked on an eq-ui release. Swap back once
-// eq-ui's Button.tsx uses `import { type ButtonHTMLAttributes, ... }`.
+// Note: the verdict toggle-group (Same person / Different / Unsure below)
+// and the Change-answer/Ask-Claude links stay hand-rolled deliberately —
+// they need a segmented "current selection" + "AI-suggested" highlight
+// treatment @eq-solutions/ui has no component for. Button above is the
+// clean fit for the plain confirm/cancel/preview actions; forcing the
+// toggle group into it would lose the highlight states, not gain consistency.
 
 function ContactAdvisoryPanel({
   summary, onAdjudicate, saving, errors, onAskAi, aiSuggest, aiBusy, aiErr,
