@@ -10,6 +10,9 @@ import {
   collectPreCommitWarnings,
   describeWarning,
   warningsFingerprint,
+  filterResolvedWarnings,
+  duplicateRowsKey,
+  multiValueKey,
   type PreCommitWarning,
 } from "../src/shared/precommit-warnings.js";
 import type { FileSlot } from "../src/shared/intake-bundle.js";
@@ -286,5 +289,93 @@ describe("describeWarning — duplicate rows", () => {
     expect(msg).toContain("1 and 3"); // 1-based for a human, not the 0-based index
     expect(msg).toContain("Ergo Group");
     expect(msg).toContain("ergo group");
+  });
+});
+
+describe("describeWarning — duplicate existing (against live EQ records)", () => {
+  it("names the row, the new value, and the existing record it might already be", () => {
+    const msg = describeWarning({
+      kind: "duplicate_existing",
+      slotLabel: "customers.csv",
+      role: "customer",
+      rowIndex: 3,
+      newValue: "Ergo Group",
+      existingId: "cust-123",
+      existingLabel: "ERGO GROUP PTY LTD",
+      similarity: 0.91,
+    });
+    expect(msg).toContain("customers.csv");
+    expect(msg).toContain("row 4"); // 1-based for a human, not the 0-based index
+    expect(msg).toContain("Ergo Group");
+    expect(msg).toContain("ERGO GROUP PTY LTD");
+  });
+});
+
+describe("warningsFingerprint — duplicate existing", () => {
+  it("changes when a live-duplicate candidate resolves, so an old acknowledgment doesn't carry over", () => {
+    const before: PreCommitWarning[] = [
+      {
+        kind: "duplicate_existing",
+        slotLabel: "customers.csv",
+        role: "customer",
+        rowIndex: 3,
+        newValue: "Ergo Group",
+        existingId: "cust-123",
+        existingLabel: "ERGO GROUP PTY LTD",
+        similarity: 0.91,
+      },
+    ];
+    expect(warningsFingerprint(before)).not.toBe(warningsFingerprint([]));
+  });
+});
+
+describe("filterResolvedWarnings", () => {
+  const dupRows: PreCommitWarning = {
+    kind: "duplicate_rows",
+    slotLabel: "customers.csv",
+    role: "customer",
+    rowIndices: [0, 2],
+    values: ["Ergo Group", "ergo group"],
+    similarity: 1,
+  };
+  const multiValue: PreCommitWarning = {
+    kind: "multi_value",
+    slotLabel: "sites.csv",
+    field: "name",
+    sourceColumn: "Site Name",
+    affectedRowCount: 2,
+    sampleValues: ["Wollongong, Malabar"],
+  };
+
+  it("drops a duplicate_rows question once its pair is resolved, keeps it while unresolved", () => {
+    expect(filterResolvedWarnings([dupRows], {}, {})).toEqual([dupRows]);
+    const resolved = { [duplicateRowsKey("customer", [0, 2])]: "merge" as const };
+    expect(filterResolvedWarnings([dupRows], resolved, {})).toEqual([]);
+  });
+
+  it("drops a multi_value question once its field is resolved, keeps it while unresolved", () => {
+    expect(filterResolvedWarnings([multiValue], {}, {})).toEqual([multiValue]);
+    const resolved = { [multiValueKey("sites.csv", "name")]: "split" as const };
+    expect(filterResolvedWarnings([multiValue], {}, resolved)).toEqual([]);
+  });
+
+  it("a resolution for the wrong pair/field never suppresses a different question", () => {
+    const wrongPair = { [duplicateRowsKey("customer", [1, 3])]: "merge" as const };
+    expect(filterResolvedWarnings([dupRows], wrongPair, {})).toEqual([dupRows]);
+  });
+
+  it("leaves low_confidence, unmapped_required, and duplicate_existing untouched — they resolve their own way", () => {
+    const others: PreCommitWarning[] = [
+      { kind: "low_confidence", slotLabel: "x.csv", role: "site", method: "ai" },
+      {
+        kind: "unmapped_required", slotLabel: "x.csv", role: "site", field: "name",
+        reason: "required", availableHeaders: ["A"],
+      },
+      {
+        kind: "duplicate_existing", slotLabel: "x.csv", role: "customer", rowIndex: 0,
+        newValue: "A", existingId: "id-1", existingLabel: "A", similarity: 1,
+      },
+    ];
+    expect(filterResolvedWarnings(others, {}, {})).toEqual(others);
   });
 });

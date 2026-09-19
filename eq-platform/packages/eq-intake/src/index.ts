@@ -146,8 +146,8 @@ export type {
 // detectAllDuplicates() — exported so other consumers of this package (e.g.
 // eq-shell's own Contacts dedup) can reuse the same fuzzy-match algorithm
 // instead of maintaining a second copy of it.
-export { detectAllDuplicates, identityLabelFor, identityKeyFor, dice, HIGH_SIM } from "./duplicate-detect.js";
-export type { DuplicateCluster, DuplicateReport } from "./duplicate-detect.js";
+export { detectAllDuplicates, identityLabelFor, identityKeyFor, dice, HIGH_SIM, PK, matchAgainstLiveRecords } from "./duplicate-detect.js";
+export type { DuplicateCluster, DuplicateReport, LiveIdentityMatch, LiveRowLookup } from "./duplicate-detect.js";
 
 export { decayCheck } from "./decay-detect.js";
 export type {

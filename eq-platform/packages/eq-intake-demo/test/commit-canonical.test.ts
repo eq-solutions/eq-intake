@@ -18,13 +18,14 @@
  * Tests verify the RPC call shapes rather than from() call shapes.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   commitBundleToCanonical,
   inferMapping,
   previewMultiValueCandidates,
   previewUnmappedRequiredFields,
   previewDuplicateRows,
+  previewDuplicatesAgainstLive,
   type SupabaseLikeClient,
   type StageCommitFn,
 } from "../src/canonical/commit-canonical.js";
@@ -644,6 +645,74 @@ describe("previewDuplicateRows", () => {
   });
 });
 
+describe("previewDuplicatesAgainstLive", () => {
+  const sheet = (rows: Record<string, unknown>[], headerRow: string[]) => ({
+    sheetName: "csv",
+    headerRow,
+    rows,
+    meta: {
+      encoding: "utf-8", delimiter: ",", totalRows: rows.length,
+      emptyRowsSkipped: 0, malformedRows: 0, malformed: [], bomDetected: false,
+    },
+  });
+
+  it("flags a new row that looks like a customer already saved in EQ — the Madagins case", async () => {
+    const lookup = vi.fn(async (entity: string) => {
+      expect(entity).toBe("customers"); // singular CanonicalEntity -> plural table name
+      return [{ customer_id: "cust-1", company_name: "ERGO GROUP PTY LTD", active: true }];
+    });
+    const candidates = await previewDuplicatesAgainstLive(
+      sheet([{ Clients: "Ergo Group" }], ["Clients"]) as never,
+      "customer",
+      lookup,
+      { Clients: "company_name" },
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({
+      rowIndex: 0,
+      newValue: "Ergo Group",
+      existingId: "cust-1",
+      existingLabel: "ERGO GROUP PTY LTD",
+    });
+    expect(lookup).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not flag a genuinely new customer", async () => {
+    const lookup = vi.fn(async () => [
+      { customer_id: "cust-1", company_name: "ERGO GROUP PTY LTD", active: true },
+    ]);
+    const candidates = await previewDuplicatesAgainstLive(
+      sheet([{ Clients: "D4C Water" }], ["Clients"]) as never,
+      "customer",
+      lookup,
+      { Clients: "company_name" },
+    );
+    expect(candidates).toEqual([]);
+  });
+
+  it("returns [] for licence without calling the lookup — no identity fields defined, same boundary as previewDuplicateRows", async () => {
+    const lookup = vi.fn(async () => []);
+    const candidates = await previewDuplicatesAgainstLive(
+      sheet([{ X: "a" }], ["X"]) as never,
+      "licence",
+      lookup,
+    );
+    expect(candidates).toEqual([]);
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it("degrades to [] rather than throwing when the live lookup fails", async () => {
+    const lookup = vi.fn(async () => { throw new Error("network error"); });
+    const candidates = await previewDuplicatesAgainstLive(
+      sheet([{ Clients: "Ergo Group" }], ["Clients"]) as never,
+      "customer",
+      lookup,
+      { Clients: "company_name" },
+    );
+    expect(candidates).toEqual([]);
+  });
+});
+
 describe("commitBundleToCanonical — manualMapping", () => {
   const sheet = (rows: Record<string, unknown>[], headerRow: string[]) => ({
     sheetName: "csv",
@@ -716,6 +785,68 @@ describe("commitBundleToCanonical — multi_value_candidate flag", () => {
     // still commits as one merged value, same fallback @eq/confirm-ui uses
     // for an unresolved split_row flag.
     expect(siteResult?.committedCount).toBe(1);
+  });
+
+  it("splits into two rows when the user confirms the split, mirroring confirm-ui's split_row", async () => {
+    const state: MockState = { rpcCalls: [] };
+    const supabase = makeMockSupabase(state);
+
+    const SITE_SHEET = {
+      sheetName: "csv",
+      headerRow: ["Site Name"],
+      rows: [{ "Site Name": "Wollongong, Malabar" }],
+      meta: {
+        encoding: "utf-8", delimiter: ",", totalRows: 1,
+        emptyRowsSkipped: 0, malformedRows: 0, malformed: [], bomDetected: false,
+      },
+    };
+
+    const result = await commitBundleToCanonical({
+      supabase,
+      bundle: { site: SITE_SHEET as never },
+      tenantId: TENANT,
+      splitFields: { site: ["name"] },
+    });
+
+    const siteResult = result.perEntity.find((r) => r.entity === "site");
+    expect(siteResult?.committedCount).toBe(2);
+    expect(siteResult?.flaggedCount).toBe(0); // confirmed and split — no longer something to flag
+
+    const commitCall = state.rpcCalls.find((c) => c.name === "eq_intake_commit_batch");
+    const sentNames = (commitCall?.params as { p_rows: Array<{ name: string }> }).p_rows.map((r) => r.name);
+    expect(sentNames).toEqual(["Wollongong", "Malabar"]);
+  });
+
+  it("a row after a split still reports its TRUE original row number when rejected, not an expanded-array position", async () => {
+    const state: MockState = { rpcCalls: [] };
+    const supabase = makeMockSupabase(state);
+
+    // Row 0 splits into 2 rows. Row 1 has no name at all — required field
+    // missing, rejected by validate(). In the expanded array this lands at
+    // position 2 (after the split's two siblings), but it must still be
+    // reported as row 1 — the row a human looking at their own spreadsheet
+    // would call "row 2" (1-based).
+    const SITE_SHEET = {
+      sheetName: "csv",
+      headerRow: ["Site Name"],
+      rows: [{ "Site Name": "Wollongong, Malabar" }, { "Site Name": "" }],
+      meta: {
+        encoding: "utf-8", delimiter: ",", totalRows: 2,
+        emptyRowsSkipped: 0, malformedRows: 0, malformed: [], bomDetected: false,
+      },
+    };
+
+    const result = await commitBundleToCanonical({
+      supabase,
+      bundle: { site: SITE_SHEET as never },
+      tenantId: TENANT,
+      splitFields: { site: ["name"] },
+    });
+
+    const siteResult = result.perEntity.find((r) => r.entity === "site");
+    expect(siteResult?.committedCount).toBe(2);
+    expect(siteResult?.rejectedCount).toBe(1);
+    expect(siteResult?.rejectedRows[0]?.source_row_index).toBe(1);
   });
 });
 

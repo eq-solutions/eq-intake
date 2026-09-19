@@ -53,6 +53,16 @@ export type PreCommitWarning =
       rowIndices: [number, number];
       values: [string, string];
       similarity: number;
+    }
+  | {
+      kind: "duplicate_existing";
+      slotLabel: string;
+      role: RoleName;
+      rowIndex: number;
+      newValue: string;
+      existingId: string;
+      existingLabel: string;
+      similarity: number;
     };
 
 /**
@@ -148,6 +158,9 @@ export function describeWarning(w: PreCommitWarning): string {
     const [a, b] = w.values;
     return `"${w.slotLabel}" — rows ${w.rowIndices[0] + 1} and ${w.rowIndices[1] + 1} look like the same one: "${a}" / "${b}".`;
   }
+  if (w.kind === "duplicate_existing") {
+    return `"${w.slotLabel}" — row ${w.rowIndex + 1} ("${w.newValue}") looks like it might already be in EQ as "${w.existingLabel}".`;
+  }
   const n = w.affectedRowCount;
   const examples = w.sampleValues.slice(0, 2).join("; ");
   return `"${w.slotLabel}" — '${w.sourceColumn}' has ${n} row${n === 1 ? "" : "s"} with more than one value (e.g. ${examples}) — saves as one combined value unless fixed first.`;
@@ -160,12 +173,56 @@ export function describeWarning(w: PreCommitWarning): string {
  * unmapped_required warning, or a problem file is removed — so an earlier
  * "I've checked these" never silently covers a DIFFERENT problem.
  */
+export type DuplicateRowsResolution = "merge" | "keep_both";
+export type MultiValueResolution = "split" | "keep_combined";
+
+/** Resolution key for a duplicate_rows pair — order matches the warning's own rowIndices. */
+export function duplicateRowsKey(role: RoleName, rowIndices: [number, number]): string {
+  return `${role}:${rowIndices[0]}:${rowIndices[1]}`;
+}
+
+/**
+ * Resolution key for a multi_value warning — field-level (one candidate
+ * already covers every affected row in that column), keyed by slotLabel
+ * rather than role since the multi_value variant carries no role of its own
+ * (see PreCommitWarning's union) — a slot's file name is unique per bundle.
+ */
+export function multiValueKey(slotLabel: string, field: string): string {
+  return `${slotLabel}:${field}`;
+}
+
+/**
+ * Drops any duplicate_rows/multi_value warning the user already resolved —
+ * a real fix, same principle unmapped_required's column-pick and
+ * duplicate_existing's Skip/Keep already follow. low_confidence and
+ * unmapped_required aren't touched here: the former resolves by the slot's
+ * role/method actually changing (DetectionLine's own picker), the latter by
+ * manualMappings actually satisfying collectPreCommitWarnings, so both
+ * already disappear on their own without a separate resolution map.
+ */
+export function filterResolvedWarnings(
+  warnings: PreCommitWarning[],
+  duplicateRowsResolutions: Record<string, DuplicateRowsResolution>,
+  multiValueResolutions: Record<string, MultiValueResolution>,
+): PreCommitWarning[] {
+  return warnings.filter((w) => {
+    if (w.kind === "duplicate_rows") {
+      return !duplicateRowsResolutions[duplicateRowsKey(w.role, w.rowIndices)];
+    }
+    if (w.kind === "multi_value") {
+      return !multiValueResolutions[multiValueKey(w.slotLabel, w.field)];
+    }
+    return true;
+  });
+}
+
 export function warningsFingerprint(warnings: PreCommitWarning[]): string {
   return warnings
     .map((w) => {
       if (w.kind === "low_confidence") return `low_confidence:${w.slotLabel}:${w.role}:${w.method}`;
       if (w.kind === "unmapped_required") return `unmapped_required:${w.slotLabel}:${w.field}:${w.reason}`;
       if (w.kind === "duplicate_rows") return `duplicate_rows:${w.slotLabel}:${w.rowIndices.join(",")}`;
+      if (w.kind === "duplicate_existing") return `duplicate_existing:${w.slotLabel}:${w.rowIndex}:${w.existingId}`;
       return `multi_value:${w.slotLabel}:${w.field}:${w.affectedRowCount}`;
     })
     .join("|");
