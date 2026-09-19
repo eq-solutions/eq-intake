@@ -1650,7 +1650,8 @@ button.eq-primary:hover {
 
 .eq-intake-slot__sheet {
   font-size: 11px;
-  color: var(--eq-deep);
+  color: var(--eq-muted);
+  font-style: italic;
 }
 
 .eq-intake-slot__meta {
@@ -2316,16 +2317,83 @@ button.eq-primary:hover {
  * @media (max-width: 600px) block further down.
  * ========================================================================= */
 
-/* Destination picker — "Where's it going?" label + pill row. */
+/* Destination picker — Into EQ hero button + a collapsed Quick Export
+ * disclosure. Into EQ and Quick Export answer opposite questions ("bring
+ * this in" vs. "reshape my data for another system"), so they no longer
+ * share one flat pill row — see DestinationPicker.tsx's own module comment. */
 .eq-intake-dest {
   margin-bottom: 20px;
 }
 
-.eq-intake-dest__label {
+.eq-dest-primary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: 14px 18px;
+  border: 1px solid var(--eq-line);
+  border-radius: 8px;
+  background: var(--eq-ice);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+
+.eq-dest-primary:hover:not(:disabled) {
+  border-color: var(--eq-sky);
+}
+
+.eq-dest-primary--active {
+  background: var(--eq-sky);
+  border-color: var(--eq-sky);
+}
+
+.eq-dest-primary--active .eq-dest-primary__label,
+.eq-dest-primary--active .eq-dest-primary__desc {
+  color: white;
+}
+
+.eq-dest-primary--disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.eq-dest-primary__label {
   font-size: 15px;
   font-weight: 700;
   color: var(--eq-ink);
-  margin-bottom: 12px;
+}
+
+.eq-dest-primary__desc {
+  font-size: 13px;
+  color: var(--eq-muted);
+}
+
+/* Quick Export — closed by default (see the `open` prop in
+ * DestinationPicker.tsx); only the summary line shows until a user asks. */
+.eq-intake-dest-more {
+  margin-top: 10px;
+}
+
+.eq-intake-dest-more > summary {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--eq-deep);
+  cursor: pointer;
+  list-style: none;
+}
+
+.eq-intake-dest-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.eq-intake-dest-more > summary:hover {
+  text-decoration: underline;
+}
+
+.eq-intake-dest-more[open] > summary {
+  margin-bottom: 10px;
 }
 
 .eq-intake-dest__row {
