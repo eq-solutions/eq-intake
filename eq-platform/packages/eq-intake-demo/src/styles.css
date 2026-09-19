@@ -3679,20 +3679,11 @@ button.eq-primary:hover {
 .eq-health-home { padding: 24px 0; }
 .eq-health-home__title { font-size: 18px; font-weight: 600; color: var(--eq-ink); margin: 0 0 4px; }
 .eq-health-home__subtitle { font-size: 13px; color: var(--eq-muted); margin: 0 0 24px; }
-.eq-health-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
-.eq-health-card { background: var(--eq-paper); border: 1px solid var(--eq-line); border-radius: 8px; padding: 16px; cursor: pointer; transition: border-color 0.15s; }
-.eq-health-card:hover { border-color: var(--eq-sky); }
-.eq-health-card__name { font-size: 13px; font-weight: 600; color: var(--eq-ink); margin: 0 0 2px; }
-.eq-health-card__count { font-size: 12px; color: var(--eq-muted); margin: 0 0 10px; }
-.eq-health-bar-wrap { height: 6px; background: var(--eq-line); border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
-.eq-health-bar { height: 100%; border-radius: 3px; transition: width 0.3s; }
-.eq-health-bar--ok   { background: var(--eq-ok); }
-.eq-health-bar--warn { background: var(--eq-warn); }
-.eq-health-bar--err  { background: var(--eq-err); }
-.eq-health-card__pct { font-size: 12px; font-weight: 600; color: var(--eq-ink); margin: 0 0 6px; }
 .eq-health-card__gaps { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin: 0; }
 .eq-health-card__gaps-label { font-size: 11px; color: var(--eq-muted); }
 .eq-health-card__low-sample { font-size: 11px; color: var(--eq-warn); margin: 0 0 4px; }
+/* Shared badge-row layout — also used by Contact/DuplicateMergePanel, not
+   private to this component. Do not remove even if this file stops using it. */
 .eq-health-licence-strip { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
 .eq-health-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
 .eq-health-badge--critical { background: #fee2e2; color: #991b1b; }
@@ -3704,7 +3695,36 @@ button.eq-primary:hover {
 .eq-health-loading { font-size: 13px; color: var(--eq-muted); padding: 24px 0; }
 .eq-health-loading-hint { font-size: 12px; color: var(--eq-muted); margin: -8px 0 12px; }
 .eq-health-refresh-row { display: flex; justify-content: flex-end; margin-bottom: 8px; }
-.eq-health-scan-hint { display: block; font-size: 12px; color: var(--eq-muted); margin-top: 4px; }
+
+/* Unified checks list — every record-completeness row and every data-quality
+   check (licences, broken links, duplicates, record age) renders through
+   this one row shape instead of a separate card/grid/strip layout each. */
+.eq-health-list-section { margin-bottom: 20px; }
+.eq-health-list { display: flex; flex-direction: column; border: 1px solid var(--eq-line); border-radius: 8px; overflow: hidden; }
+.eq-health-row { display: flex; align-items: flex-start; gap: 10px; width: 100%; margin: 0; padding: 10px 14px; box-sizing: border-box; background: var(--eq-paper); border: none; border-bottom: 1px solid var(--eq-line); font-family: inherit; text-align: left; }
+.eq-health-list .eq-health-row:last-child { border-bottom: none; }
+.eq-health-row--clickable { cursor: pointer; transition: background-color 0.15s; }
+.eq-health-row--clickable:hover { background: var(--eq-ice); }
+.eq-health-row-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+.eq-health-row-dot--ok      { background: var(--eq-ok); }
+.eq-health-row-dot--warn    { background: var(--eq-warn); }
+.eq-health-row-dot--err     { background: var(--eq-err); }
+.eq-health-row-dot--info    { background: var(--eq-sky); }
+.eq-health-row-dot--neutral { background: var(--eq-line); }
+.eq-health-row-main { flex: 1; min-width: 0; }
+.eq-health-row-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.eq-health-row-label { font-size: 13px; font-weight: 600; color: var(--eq-ink); }
+.eq-health-row-meta { font-size: 12px; color: var(--eq-muted); }
+.eq-health-row-summary { font-size: 12px; color: var(--eq-muted); margin-left: auto; flex-shrink: 0; white-space: nowrap; }
+.eq-health-row-bar-wrap { height: 4px; background: var(--eq-line); border-radius: 2px; overflow: hidden; margin-top: 6px; max-width: 280px; }
+.eq-health-row-bar { height: 100%; border-radius: 2px; transition: width 0.3s; }
+.eq-health-row-bar--ok      { background: var(--eq-ok); }
+.eq-health-row-bar--warn    { background: var(--eq-warn); }
+.eq-health-row-bar--err     { background: var(--eq-err); }
+.eq-health-row-bar--info    { background: var(--eq-sky); }
+.eq-health-row-bar--neutral { background: var(--eq-line); }
+.eq-health-row-detail { margin-top: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--eq-muted); }
+.eq-health-row-action { flex-shrink: 0; }
 
 /* ---- Empty state: brand-new tenant, nothing imported anywhere yet ---- */
 .eq-health-empty { text-align: center; padding: 48px 24px; }
@@ -3823,9 +3843,6 @@ button.eq-primary:hover {
   .eq-queue__item-actions { justify-content: flex-start; max-width: none; }
 }
 
-/* Health card header row */
-.eq-health-card__header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
-
 /* Composite score + ring */
 .eq-health-top { display: flex; align-items: flex-start; gap: 24px; margin-bottom: 24px; flex-wrap: wrap; }
 .eq-health-ring-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0; }
@@ -3891,9 +3908,6 @@ button.eq-primary:hover {
 .eq-health-action-badge--danger  { background: #fee2e2; color: #991b1b; }
 .eq-health-action-badge--warning { background: #fef3c7; color: #92400e; }
 .eq-health-action-badge--info    { background: var(--eq-ice); color: var(--eq-deep); }
-
-/* Strip section wrapper */
-.eq-health-strip-section { margin-bottom: 16px; }
 
 /* ===== Entity Drill-Down ===== */
 .eq-drill { padding: 24px 0; }
@@ -3964,8 +3978,6 @@ button.eq-primary:hover {
 .eq-drill__empty { text-align: center; padding: 32px; color: var(--eq-muted); font-size: 13px; }
 
 @media (max-width: 600px) {
-  .eq-health-grid { grid-template-columns: 1fr 1fr; }
-  .eq-health-card { padding: 12px; }
   .eq-drill__header { gap: 8px; flex-direction: column; align-items: flex-start; }
   .eq-drill__actions { width: 100%; justify-content: space-between; }
   .eq-drill__data-table { font-size: 12px; }
@@ -4023,9 +4035,7 @@ button.eq-primary:hover {
 .eq-bulkfill__label { font-size: 13px; color: var(--eq-ink); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .eq-bulkfill__input { border: 1px solid var(--eq-sky); border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 200px; flex-shrink: 0; }
 
-/* Orphan strip — reuse licence section layout */
-.eq-health-orphan { display: flex; flex-wrap: wrap; gap: 8px; }
-.eq-health-orphan--ok { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Clickable badge inside an eq-health-row-detail (orphans/duplicates/decay) */
 .eq-health-orphan__btn { cursor: pointer; border: none; font-family: inherit; font-size: inherit; text-align: left; }
 
 .eq-intake-preview__table tbody tr {
