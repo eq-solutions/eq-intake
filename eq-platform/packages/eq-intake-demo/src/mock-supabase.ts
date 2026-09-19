@@ -40,10 +40,6 @@ export function createMockSupabase(): SupabaseLikeClient {
     rpc: async (name: string, params: unknown) => {
       const p = (params ?? {}) as Record<string, unknown>;
 
-      if (name === "eq_create_intake_event" || name === "eq_finish_intake_event") {
-        return { data: null, error: null };
-      }
-
       if (name === "eq_read_customers_by_intake") {
         // No prior customers in this offline session — every FK lookup misses,
         // same as a brand-new tenant. Real behaviour, not faked leniency.

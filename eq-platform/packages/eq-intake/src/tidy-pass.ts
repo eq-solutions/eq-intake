@@ -461,29 +461,16 @@ export async function commitTidyFixes(opts: TidyCommitOpts): Promise<TidyCommitR
   const progress = opts.onProgress ?? (() => undefined);
   progress(`Committing ${opts.fixes.length} fix${opts.fixes.length === 1 ? '' : 'es'}…`);
 
-  // Create a tidy-specific intake event for the audit trail
+  // Local correlation id only — eq_create_intake_event/eq_finish_intake_event
+  // (the audit-trail wrappers this used to call before and after the real
+  // commit) were dropped from every tenant plane 2026-05-24; see
+  // commit-canonical.ts's top-of-file comment for the full history. The
+  // pre-commit auth.getUser() check existed solely to supply that dead call's
+  // p_created_by — EQ Shell's real tenant client never carries a Supabase
+  // Auth session (identity rides a proxied bearer header instead), so that
+  // check unconditionally threw "Session expired" in production regardless
+  // of whether the user was actually signed in.
   const intakeId = crypto.randomUUID();
-
-  const { data: { user } } = await opts.supabase.auth.getUser();
-  if (!user?.id) {
-    throw new Error('Session expired — please reload');
-  }
-
-  const { error: eventError } = await opts.supabase.rpc('eq_create_intake_event', {
-    p_intake_id:      intakeId,
-    p_tenant_id:      opts.tenantId,
-    p_entity:         'customer',   // primary entity; tidy spans multiple, use placeholder
-    p_source_kind:    'tidy_pass',
-    p_source_filename: null,
-    p_schema_version: '1.0.0',
-    p_status:         'committing',
-    p_import_mode:    'upsert',
-    p_created_by:     user.id,
-  });
-
-  if (eventError) {
-    throw new Error(`Failed to create tidy intake event: ${eventError.message}`);
-  }
 
   // Shape fixes into the RPC payload
   const rpcFixes = opts.fixes.map((f) => ({
@@ -501,29 +488,12 @@ export async function commitTidyFixes(opts: TidyCommitOpts): Promise<TidyCommitR
   const errors: TidyCommitResult['errors'] = [];
 
   if (error) {
-    await opts.supabase.rpc('eq_finish_intake_event', {
-      p_intake_id:      intakeId,
-      p_status:         'failed',
-      p_rows_committed: 0,
-      p_rows_flagged:   0,
-      p_rows_rejected:  opts.fixes.length,
-      p_error_message:  error.message,
-    });
     throw new Error(`eq_tidy_commit_fixes failed: ${error.message}`);
   }
 
   const rpcResult = data as { applied: number; skipped: number } | null;
   const applied = rpcResult?.applied ?? 0;
   const skipped = rpcResult?.skipped ?? 0;
-
-  await opts.supabase.rpc('eq_finish_intake_event', {
-    p_intake_id:      intakeId,
-    p_status:         'completed',
-    p_rows_committed: applied,
-    p_rows_flagged:   0,
-    p_rows_rejected:  skipped,
-    p_error_message:  null,
-  });
 
   progress(`Done — ${applied} fixed, ${skipped} skipped.`);
 
