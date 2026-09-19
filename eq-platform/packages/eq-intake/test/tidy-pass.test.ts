@@ -10,8 +10,9 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { runTidyPass } from "../src/tidy-pass.js";
+import { runTidyPass, commitTidyFixes } from "../src/tidy-pass.js";
 import type { SupabaseLikeClient } from "../src/canonical/commit-canonical.js";
+import type { TidyFix } from "../src/tidy-types.js";
 
 const TENANT = "7dee117c-98bd-4d39-af8c-2c81d02a1e85";
 
@@ -123,5 +124,74 @@ describe("runTidyPass — required-field gaps", () => {
     expect(gap!.gap_type).toBe("required_missing");
     expect(gap!.allowed_values).toBeDefined();
     expect(gap!.allowed_values!.length).toBeGreaterThan(0);
+  });
+});
+
+describe("commitTidyFixes", () => {
+  // eq_create_intake_event / eq_finish_intake_event were dropped from every
+  // tenant plane 2026-05-24 (same finding as commit-canonical.ts, PR #142).
+  // This mock errors on any RPC name it doesn't explicitly recognise — the
+  // permissive fakeClient() above (blanket { data: [], error: null }) is
+  // exactly the kind of mock that let the real bug hide for months.
+  function makeCommitMock(state: {
+    rpcCalls: string[];
+    commitError?: { message: string };
+    commitData?: { applied: number; skipped: number };
+  }): SupabaseLikeClient {
+    return {
+      rpc: async (name: string, _params: unknown) => {
+        state.rpcCalls.push(name);
+        if (name === "eq_tidy_commit_fixes") {
+          if (state.commitError) return { data: null, error: state.commitError };
+          return { data: state.commitData ?? { applied: 1, skipped: 0 }, error: null };
+        }
+        return { data: null, error: { message: `mock: no handler for rpc "${name}"` } };
+      },
+    } as unknown as SupabaseLikeClient;
+  }
+
+  const FIX: TidyFix = {
+    entity: "staff",
+    table: "staff",
+    row_id: "s-1",
+    row_label: "Tom Ivicevic",
+    field: "employment_type",
+    fix_type: "auto_normalise",
+    old_value: "Direct",
+    new_value: "employee",
+  };
+
+  it("regression: never calls the retired eq_create_intake_event / eq_finish_intake_event RPCs", async () => {
+    // Reported live: this used to throw "Session expired" or "Failed to
+    // create tidy intake event" before eq_tidy_commit_fixes ever ran, on
+    // EVERY call — EQ Shell's real tenant client never carries a Supabase
+    // Auth session, so the old unconditional auth.getUser() check always
+    // failed there regardless of whether the user was signed in.
+    const state = { rpcCalls: [] as string[] };
+    const supabase = makeCommitMock(state);
+
+    const result = await commitTidyFixes({ supabase, tenantId: "tenant-1", fixes: [FIX] });
+
+    expect(result.applied).toBe(1);
+    expect(state.rpcCalls).toEqual(["eq_tidy_commit_fixes"]);
+  });
+
+  it("does not call eq_tidy_commit_fixes at all for an empty fix list", async () => {
+    const state = { rpcCalls: [] as string[] };
+    const supabase = makeCommitMock(state);
+
+    const result = await commitTidyFixes({ supabase, tenantId: "tenant-1", fixes: [] });
+
+    expect(result).toEqual({ intakeId: null, applied: 0, skipped: 0, errors: [] });
+    expect(state.rpcCalls).toEqual([]);
+  });
+
+  it("surfaces an eq_tidy_commit_fixes failure as a thrown error", async () => {
+    const state = { rpcCalls: [] as string[], commitError: { message: "tenant_id mismatch" } };
+    const supabase = makeCommitMock(state);
+
+    await expect(
+      commitTidyFixes({ supabase, tenantId: "tenant-1", fixes: [FIX] }),
+    ).rejects.toThrow(/tenant_id mismatch/);
   });
 });

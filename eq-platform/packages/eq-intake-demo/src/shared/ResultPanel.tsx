@@ -7,10 +7,12 @@
  * below this (RowsDisclosure, in CommitView) are unchanged — this only
  * replaces the summary line above them.
  *
- * "Audit log" in the sub-line is plain text, not a link: eq_intake_events
- * genuinely records the filename + per-row detail server-side (see
- * commit-canonical.ts's createIntakeEvent), so the claim is true, but this
- * package has no route to a Shell Audit Log screen to link to.
+ * The sub-line used to promise "you can trace any row in Audit log" —
+ * that was true only while eq_intake_events was still being written from
+ * here (commit-canonical.ts's now-removed createIntakeEvent; see its
+ * top-of-file comment). Nothing populates that row anymore, so the claim
+ * would be false for every real commit once commits actually started
+ * succeeding (PR #142) — dropped rather than left to mislead.
  */
 
 import type { JSX } from "react";
@@ -79,7 +81,7 @@ export function ResultPanel({ result, sourceFilename, onViewEntity, onViewQueue,
 
       {sourceFilename && (
         <p className="eq-result__sub">
-          Filed from {sourceFilename} — you can trace any row in Audit log.
+          Filed from {sourceFilename}.
         </p>
       )}
 
