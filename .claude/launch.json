@@ -6,6 +6,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--dir", "eq-platform", "--filter", "@eq/intake-demo", "dev"],
       "port": 5174
+    },
+    {
+      "name": "eq-intake-demo-alt",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "eq-platform", "--filter", "@eq/intake-demo", "exec", "vite", "--port", "5175"],
+      "port": 5175
     }
   ]
 }

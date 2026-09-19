@@ -108,6 +108,9 @@ export function DetectionLine({ slot, onPick }: DetectionLineProps): JSX.Element
           <button type="button" className="eq-detect__pick" onClick={() => handlePick(b)}>
             {entityLabel(b)}
           </button>
+          <button type="button" className="eq-detect__change" onClick={() => setOverriding(true)}>
+            Something else?
+          </button>
         </div>
       </div>,
     );
