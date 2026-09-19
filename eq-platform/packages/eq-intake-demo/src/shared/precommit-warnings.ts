@@ -104,24 +104,27 @@ export function collectPreCommitWarnings(
   return warnings;
 }
 
-/** Plain-English line for one warning, for the review panel's list. */
+/**
+ * Plain-English line for one warning, for the review panel's list. Kept
+ * short and scannable on purpose — a human's already seen the fuller
+ * explanation once, in DetectionLine, before reaching this panel; repeating
+ * it at length here just made the real screen read as noise (feedback from
+ * watching the actual production screen, not a style guess).
+ */
 export function describeWarning(w: PreCommitWarning): string {
   if (w.kind === "low_confidence") {
-    const reason =
-      w.method === "ai"
-        ? "an AI guess, not a clear column match"
-        : "a rough guess — the column names didn't clearly point to one type";
-    return `"${w.slotLabel}" — not fully sure this is ${roleLabel(w.role)} (${reason}). Check it's the right type before saving.`;
+    const reason = w.method === "ai" ? "an AI guess" : "a guess from the column names";
+    return `"${w.slotLabel}" — might not be ${roleLabel(w.role)} (${reason}). Check before saving.`;
   }
   if (w.kind === "unmapped_required") {
     if (w.reason === "customer_needs_a_name") {
-      return `"${w.slotLabel}" — couldn't find a company name or person's name column. Pick the column that has it below, or these rows won't save.`;
+      return `"${w.slotLabel}" — which column has the company name or person's name?`;
     }
-    return `"${w.slotLabel}" — couldn't find a column for "${w.field.replace(/_/g, " ")}". Pick one below, or this row won't save.`;
+    return `"${w.slotLabel}" — which column is "${w.field.replace(/_/g, " ")}"?`;
   }
   const n = w.affectedRowCount;
   const examples = w.sampleValues.slice(0, 2).join("; ");
-  return `"${w.slotLabel}" — ${n} row${n === 1 ? "" : "s"} in '${w.sourceColumn}' look${n === 1 ? "s" : ""} like more than one value (e.g. ${examples}). They'll save as one combined value unless you fix the source file first.`;
+  return `"${w.slotLabel}" — '${w.sourceColumn}' has ${n} row${n === 1 ? "" : "s"} with more than one value (e.g. ${examples}) — saves as one combined value unless fixed first.`;
 }
 
 /**
