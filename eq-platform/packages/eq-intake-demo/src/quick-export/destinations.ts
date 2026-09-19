@@ -145,7 +145,7 @@ export const QUICK_DESTINATIONS: QuickDestination[] = [
 
   {
     id: "xero-contacts",
-    label: "Xero contacts (import CSV)",
+    label: "Xero contacts (CSV)",
     description:
       "Xero's ContactsImport.csv format. One row per customer. Drop your SimPRO customers file.",
     needsRole: "customer",
@@ -173,7 +173,7 @@ export const QUICK_DESTINATIONS: QuickDestination[] = [
 
   {
     id: "site-sharepoint",
-    label: "Sites → SharePoint / CMDB",
+    label: "Site register (SharePoint / CMDB)",
     description:
       "Site register CSV for SharePoint or a CMDB. One row per site. Drop your SimPRO sites file.",
     needsRole: "site",

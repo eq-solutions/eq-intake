@@ -362,7 +362,7 @@ export function IntakeModule(props: IntakeModuleProps): JSX.Element {
       ) : (
         <>
           <h2>Bring something in</h2>
-          <p>Drop a file and tell us where it goes. We'll do the messy bit.</p>
+          <p>Drop a file — we'll work out what it is and bring it into EQ.</p>
 
           <IntakeDropZone
             bundle={bundle}

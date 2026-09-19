@@ -1,5 +1,5 @@
 /**
- * DestinationPicker — "Where's it going?" pill row.
+ * DestinationPicker — Into EQ (primary) + Quick Export (secondary, collapsed).
  *
  * Replaces the old <select>-based picker (three <optgroup>s) with the flat
  * pill row from INTAKE-REDESIGN-SPEC.md §5.3 / the 2026-08-17 build spec's
@@ -11,12 +11,24 @@
  * which also supports user-built templates that a flat pill row couldn't
  * represent anyway.
  *
+ * Into EQ and Quick Export answer opposite questions — "bring this file in"
+ * vs. "reshape my data for another system" — but a flat pill row of both
+ * (the original state B1 layout) put them at equal visual weight under one
+ * "Where's it going?" label, so an average first-time user had to read and
+ * discount five export options before finding the one they came for. Into
+ * EQ is now its own block (already the default — see IntakeModule's
+ * `useState(INTO_EQ_ID)`); Quick Export sits behind a closed-by-default
+ * <details> disclosure that opens itself once a quick destination is
+ * selected, or the user opens it by hand — and then stays open, since it
+ * only ever forces itself open, never closed, so it can't fight a manual
+ * toggle on some later unrelated re-render.
+ *
  * "Other…" (upload a sample list, match by column) is in the spec's copy
  * deck but has no engine behind it yet, so it renders disabled rather than
  * pretending to work.
  */
 
-import type { JSX } from "react";
+import { useState, type JSX } from "react";
 import type { IntakeBundle } from "./intake-bundle.js";
 import { roleLabel } from "./intake-bundle.js";
 import { QUICK_DESTINATIONS, type QuickDestination } from "../quick-export/destinations.js";
@@ -72,41 +84,72 @@ export interface DestinationPickerProps {
 }
 
 export function DestinationPicker({ destId, bundle, onChange }: DestinationPickerProps): JSX.Element {
+  const intoEqAvailable = destAvailable(INTO_EQ_OPTION, bundle);
+  const intoEqActive = destId === INTO_EQ_ID;
+  // <details>'s `open` must be a real, controlled value — a derived
+  // `open={!intoEqActive}` looked right but silently re-closed on any
+  // unrelated re-render while a user had it manually expanded (caught live:
+  // click to open, then anything else re-renders IntakeModule, and it snaps
+  // shut under the user's cursor). Once opened — by picking a quick
+  // destination or by hand — it stays open; it only forces itself open, never
+  // closed, so it can't fight a manual toggle.
+  const [manuallyOpened, setManuallyOpened] = useState(false);
+
   return (
     <div className="eq-intake-dest">
-      <div className="eq-intake-dest__label">Where's it going?</div>
-      <div className="eq-intake-dest__row">
-        {ALL_OPTIONS.map((opt) => {
-          const available = destAvailable(opt, bundle);
-          const missing = missingRoles(opt, bundle);
-          const active = opt.id === destId;
-          const suffix =
-            !available && missing.length > 0 ? ` — needs ${missing.map(roleLabel).join(" + ")}` : "";
-          return (
-            <button
-              key={opt.id}
-              type="button"
-              className={
-                "eq-dest-pill" + (active ? " eq-dest-pill--active" : "") + (!available ? " eq-dest-pill--disabled" : "")
-              }
-              disabled={!available}
-              title={opt.description}
-              onClick={() => onChange(opt.id)}
-            >
-              {opt.label}
-              {suffix}
-            </button>
-          );
-        })}
-        <button
-          type="button"
-          className="eq-dest-pill eq-dest-pill--disabled"
-          disabled
-          title="Upload a sample of your target list and we'll match it — coming soon."
-        >
-          Other…
-        </button>
-      </div>
+      <button
+        type="button"
+        className={
+          "eq-dest-primary" + (intoEqActive ? " eq-dest-primary--active" : "") + (!intoEqAvailable ? " eq-dest-primary--disabled" : "")
+        }
+        disabled={!intoEqAvailable}
+        onClick={() => onChange(INTO_EQ_ID)}
+      >
+        <span className="eq-dest-primary__label">{INTO_EQ_OPTION.label}</span>
+        <span className="eq-dest-primary__desc">
+          {intoEqAvailable ? INTO_EQ_OPTION.description : "Drop a file we can recognise first."}
+        </span>
+      </button>
+
+      <details
+        className="eq-intake-dest-more"
+        open={manuallyOpened || !intoEqActive}
+        onToggle={(e) => setManuallyOpened(e.currentTarget.open)}
+      >
+        <summary>Need a ready-made file for another system instead?</summary>
+        <div className="eq-intake-dest__row">
+          {QUICK_OPTIONS.map((opt) => {
+            const available = destAvailable(opt, bundle);
+            const missing = missingRoles(opt, bundle);
+            const active = opt.id === destId;
+            const suffix =
+              !available && missing.length > 0 ? ` — needs ${missing.map(roleLabel).join(" + ")}` : "";
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                className={
+                  "eq-dest-pill" + (active ? " eq-dest-pill--active" : "") + (!available ? " eq-dest-pill--disabled" : "")
+                }
+                disabled={!available}
+                title={opt.description}
+                onClick={() => onChange(opt.id)}
+              >
+                {opt.label}
+                {suffix}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            className="eq-dest-pill eq-dest-pill--disabled"
+            disabled
+            title="Upload a sample of your target list and we'll match it — coming soon."
+          >
+            Other…
+          </button>
+        </div>
+      </details>
     </div>
   );
 }

@@ -137,11 +137,16 @@ export function IntakeDropZone({ bundle, onCheckConflicts }: IntakeDropZoneProps
                       <span className="eq-intake-slot__name" title={slot.file.name}>
                         📄 {slot.file.name}
                       </span>
-                      {slot.sheet?.sheetName && slot.sheet.sheetName !== "Sheet1" && (
-                        <span className="eq-intake-slot__sheet">
-                          [{slot.sheet.sheetName}]
-                        </span>
-                      )}
+                      {slot.sheet?.sheetName &&
+                        slot.sheet.sheetName !== "Sheet1" &&
+                        slot.sheet.sheetName !== slot.file.name && (
+                          <span
+                            className="eq-intake-slot__sheet"
+                            title="The sheet/tab name inside this file — not what we think it is"
+                          >
+                            sheet: {slot.sheet.sheetName}
+                          </span>
+                        )}
                     </div>
 
                     {slot.error && (
