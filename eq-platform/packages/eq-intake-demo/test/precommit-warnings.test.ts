@@ -248,3 +248,43 @@ describe("warningsFingerprint", () => {
     expect(warningsFingerprint(before)).not.toBe(warningsFingerprint([]));
   });
 });
+
+describe("collectPreCommitWarnings — duplicate rows", () => {
+  it("flags two rows in the same sheet that look like the same customer", () => {
+    const slots = [
+      slot({
+        role: "customer",
+        method: "heuristic",
+        sheet: {
+          sheetName: "csv",
+          headerRow: ["Clients"],
+          rows: [{ Clients: "Ergo Group" }, { Clients: "Kilo Group" }, { Clients: "ergo group" }],
+          meta: {
+            encoding: "utf-8", delimiter: ",", totalRows: 3,
+            emptyRowsSkipped: 0, malformedRows: 0, malformed: [], bomDetected: false,
+          },
+        },
+      }),
+    ];
+    const warnings = collectPreCommitWarnings(slots, { customer: { Clients: "company_name" } });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatchObject({ kind: "duplicate_rows", role: "customer", rowIndices: [0, 2] });
+  });
+});
+
+describe("describeWarning — duplicate rows", () => {
+  it("names both rows and both values in plain English", () => {
+    const msg = describeWarning({
+      kind: "duplicate_rows",
+      slotLabel: "customers.csv",
+      role: "customer",
+      rowIndices: [0, 2],
+      values: ["Ergo Group", "ergo group"],
+      similarity: 1,
+    });
+    expect(msg).toContain("customers.csv");
+    expect(msg).toContain("1 and 3"); // 1-based for a human, not the 0-based index
+    expect(msg).toContain("Ergo Group");
+    expect(msg).toContain("ergo group");
+  });
+});

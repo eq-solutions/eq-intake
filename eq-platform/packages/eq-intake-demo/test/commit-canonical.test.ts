@@ -24,6 +24,7 @@ import {
   inferMapping,
   previewMultiValueCandidates,
   previewUnmappedRequiredFields,
+  previewDuplicateRows,
   type SupabaseLikeClient,
   type StageCommitFn,
 } from "../src/canonical/commit-canonical.js";
@@ -557,6 +558,89 @@ describe("previewUnmappedRequiredFields", () => {
       { Clients: "company_name" },
     );
     expect(withOverride).toEqual([]);
+  });
+});
+
+describe("previewDuplicateRows", () => {
+  const sheet = (rows: Record<string, unknown>[], headerRow: string[]) => ({
+    sheetName: "csv",
+    headerRow,
+    rows,
+    meta: {
+      encoding: "utf-8", delimiter: ",", totalRows: rows.length,
+      emptyRowsSkipped: 0, malformedRows: 0, malformed: [], bomDetected: false,
+    },
+  });
+
+  it("flags two customer rows that are the same company under trivially different spelling", () => {
+    const candidates = previewDuplicateRows(
+      sheet(
+        [{ Clients: "Ergo Group" }, { Clients: "Kilo Group" }, { Clients: "ERGO GROUP PTY LTD" }],
+        ["Clients"],
+      ) as never,
+      "customer",
+      { Clients: "company_name" },
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({ rowIndices: [0, 2] });
+    expect(candidates[0]?.values).toEqual(["Ergo Group", "ERGO GROUP PTY LTD"]);
+  });
+
+  it("does not flag genuinely different customers", () => {
+    const candidates = previewDuplicateRows(
+      sheet([{ Clients: "Orise" }, { Clients: "ARA" }, { Clients: "D4C Water" }], ["Clients"]) as never,
+      "customer",
+      { Clients: "company_name" },
+    );
+    expect(candidates).toEqual([]);
+  });
+
+  it("does not flag 'SKS' against 'SKS Technology' — genuinely different strings by dice, not this check's job", () => {
+    // Documents the boundary deliberately, rather than leaving it to be
+    // rediscovered by surprise: this is a *within-batch* check. Catching a
+    // near-miss against an ALREADY-COMMITTED customer (the actual Madagins
+    // case) needs reading existing customers, which has no RPC yet — see
+    // previewDuplicateRows's own doc comment.
+    const candidates = previewDuplicateRows(
+      sheet([{ Clients: "SKS" }, { Clients: "SKS Technology" }], ["Clients"]) as never,
+      "customer",
+      { Clients: "company_name" },
+    );
+    expect(candidates).toEqual([]);
+  });
+
+  it("flags two contact rows with the same first+last name", () => {
+    const candidates = previewDuplicateRows(
+      sheet(
+        [
+          { First: "Mark", Last: "Dobson" },
+          { First: "Adam", Last: "Shepherd" },
+          { First: "Mark", Last: "Dobson" },
+        ],
+        ["First", "Last"],
+      ) as never,
+      "contact",
+      { First: "first_name", Last: "last_name" },
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({ rowIndices: [0, 2] });
+  });
+
+  it("returns nothing for an entity with no defined identity field (licence)", () => {
+    const candidates = previewDuplicateRows(
+      sheet([{ X: "a" }, { X: "a" }], ["X"]) as never,
+      "licence",
+    );
+    expect(candidates).toEqual([]);
+  });
+
+  it("a manual mapping is honoured the same as an inferred one", () => {
+    const candidates = previewDuplicateRows(
+      sheet([{ Name: "Ergo Group" }, { Name: "Ergo Group" }], ["Name"]) as never,
+      "customer",
+      { Name: "company_name" },
+    );
+    expect(candidates).toHaveLength(1);
   });
 });
 
