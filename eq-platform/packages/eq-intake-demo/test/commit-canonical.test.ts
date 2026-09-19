@@ -23,6 +23,7 @@ import {
   commitBundleToCanonical,
   inferMapping,
   previewMultiValueCandidates,
+  previewUnmappedRequiredFields,
   type SupabaseLikeClient,
   type StageCommitFn,
 } from "../src/canonical/commit-canonical.js";
@@ -480,6 +481,125 @@ describe("previewMultiValueCandidates", () => {
 
   it("returns nothing when no cell actually has 2+ segments", () => {
     expect(previewMultiValueCandidates(sheet([{ "Site Name": "Wollongong" }]) as never, "site")).toEqual([]);
+  });
+
+  it("a manual mapping is honoured the same as an inferred one", () => {
+    // "Location" doesn't exactly match any of site.name's aliases, so without
+    // a manual override this would score zero candidates too — proving the
+    // manual pick is what makes the multi-value check see the column at all.
+    const candidates = previewMultiValueCandidates(
+      sheet([{ Location: "Wollongong, Malabar" }], ["Location"]) as never,
+      "site",
+      { Location: "name" },
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({ field: "name", sourceColumn: "Location" });
+  });
+});
+
+describe("previewUnmappedRequiredFields", () => {
+  const sheet = (rows: Record<string, unknown>[], headerRow: string[]) => ({
+    sheetName: "csv",
+    headerRow,
+    rows,
+    meta: {
+      encoding: "utf-8", delimiter: ",", totalRows: rows.length,
+      emptyRowsSkipped: 0, malformedRows: 0, malformed: [], bomDetected: false,
+    },
+  });
+
+  it("flags site.name when no header exactly matches its aliases", () => {
+    // "Description" deliberately isn't one of site.name's aliases
+    // (site_name/location/location_name/project_name/site).
+    const missing = previewUnmappedRequiredFields(
+      sheet([{ Description: "Wollongong" }], ["Description"]) as never,
+      "site",
+    );
+    expect(missing).toEqual([{ field: "name", reason: "required", availableHeaders: ["Description"] }]);
+  });
+
+  it("does not flag site_id/tenant_id/active — required, but generated on commit or defaulted", () => {
+    const missing = previewUnmappedRequiredFields(
+      sheet([{ "Site Name": "Wollongong" }], ["Site Name"]) as never,
+      "site",
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("flags customer's cross-field name rule, not a flat required entry", () => {
+    const missing = previewUnmappedRequiredFields(
+      sheet([{ Phone: "0400000000" }], ["Phone"]) as never,
+      "customer",
+    );
+    expect(missing).toEqual([
+      { field: "company_name", reason: "customer_needs_a_name", availableHeaders: ["Phone"] },
+    ]);
+  });
+
+  it("does not flag customer when only first_name/last_name are mapped (no company)", () => {
+    const missing = previewUnmappedRequiredFields(
+      sheet([{ "First Name": "Mark", "Last Name": "Dobson" }], ["First Name", "Last Name"]) as never,
+      "customer",
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("a manual mapping clears the warning it resolves", () => {
+    const withoutOverride = previewUnmappedRequiredFields(
+      sheet([{ Clients: "Orise" }], ["Clients"]) as never,
+      "customer",
+    );
+    expect(withoutOverride).toHaveLength(1);
+
+    const withOverride = previewUnmappedRequiredFields(
+      sheet([{ Clients: "Orise" }], ["Clients"]) as never,
+      "customer",
+      { Clients: "company_name" },
+    );
+    expect(withOverride).toEqual([]);
+  });
+});
+
+describe("commitBundleToCanonical — manualMapping", () => {
+  const sheet = (rows: Record<string, unknown>[], headerRow: string[]) => ({
+    sheetName: "csv",
+    headerRow,
+    rows,
+    meta: {
+      encoding: "utf-8", delimiter: ",", totalRows: rows.length,
+      emptyRowsSkipped: 0, malformedRows: 0, malformed: [], bomDetected: false,
+    },
+  });
+
+  it("without a manual mapping, an unmatched header leaves company_name blank and the row is rejected", async () => {
+    const state: MockState = { rpcCalls: [] };
+    const supabase = makeMockSupabase(state);
+    const result = await commitBundleToCanonical({
+      supabase,
+      bundle: { customer: sheet([{ Clients: "Orise" }], ["Clients"]) as never },
+      tenantId: TENANT,
+    });
+    const customerResult = result.perEntity.find((r) => r.entity === "customer");
+    expect(customerResult?.committedCount).toBe(0);
+    expect(customerResult?.rejectedCount).toBe(1);
+  });
+
+  it("with a manual mapping, the same header commits company_name correctly", async () => {
+    const state: MockState = { rpcCalls: [] };
+    const supabase = makeMockSupabase(state);
+    const result = await commitBundleToCanonical({
+      supabase,
+      bundle: { customer: sheet([{ Clients: "Orise" }], ["Clients"]) as never },
+      tenantId: TENANT,
+      manualMapping: { customer: { Clients: "company_name" } },
+    });
+    const customerResult = result.perEntity.find((r) => r.entity === "customer");
+    expect(customerResult?.rejectedCount).toBe(0);
+    expect(customerResult?.committedCount).toBe(1);
+
+    const commitCall = state.rpcCalls.find((c) => c.name === "eq_intake_commit_batch");
+    const rows = (commitCall?.params as { p_rows: Array<Record<string, unknown>> }).p_rows;
+    expect(rows[0]?.company_name).toBe("Orise");
   });
 });
 
