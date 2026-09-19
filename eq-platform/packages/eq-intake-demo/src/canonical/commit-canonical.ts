@@ -165,6 +165,16 @@ export interface CommitOptions {
    * silently failing required-field validation.
    */
   manualMapping?: Partial<Record<CanonicalEntity, Record<string, string | null>>>;
+  /**
+   * Per-entity canonical fields the user confirmed splitting on (see
+   * precommit-warnings.ts's multi_value kind) — e.g. { site: ["name"] } when
+   * "Wollongong, Malabar" in a mapped site-name column should become two
+   * site rows, not one row with a combined value. Any row whose mapped
+   * source column for that field splits into 2+ comma-separated segments is
+   * fanned into one row per segment, before FK resolution or validate() ever
+   * sees it — see commitOneEntity's own comment for why pre-validate.
+   */
+  splitFields?: Partial<Record<CanonicalEntity, string[]>>;
   /** Filename to surface in eq_intake_events.source_filename — for the audit. */
   sourceFilename?: string;
   /** Override schemas — useful for testing. Production callers pass nothing. */
@@ -893,6 +903,8 @@ interface CommitOneEntityArgs {
   staffIdMap?: Map<string, string>;
   /** Forwarded from CommitOptions.manualMapping, already sliced to this entity. */
   manualMapping?: Record<string, string | null>;
+  /** Forwarded from CommitOptions.splitFields, already sliced to this entity. */
+  splitFields?: string[];
   /** Max rows per RPC call. Defaults to 500 on the direct-RPC path. */
   chunkSize?: number;
   /** Progress callback forwarded from CommitOptions. */
@@ -943,8 +955,65 @@ async function commitOneEntity(args: CommitOneEntityArgs): Promise<EntityCommitR
   // on customer_id would let them pass as valid rows with a null FK.
   let preValidatedRows = args.sheet.rows as Record<string, unknown>[];
   const fkMissedRejections: Array<{ source_row_index: number; reasons: string[] }> = [];
-  // Maps validate()-array index → original sheet row index (needed after filtering).
-  const resolvedToOriginalIndex: number[] = [];
+  // Tracks, for each row currently in preValidatedRows, which index into the
+  // ORIGINAL args.sheet.rows it traces back to. Starts as identity and is
+  // composed (not replaced) at each transformation below — split-expansion
+  // first, then FK-filtering — so a rejection/flag reported after BOTH steps
+  // still points at the real spreadsheet row, not an intermediate array
+  // position. Split is the only step where row COUNT grows; FK-filtering
+  // only ever shrinks it — order matters for exactly that reason.
+  let resolvedToOriginalIndex: number[] = preValidatedRows.map((_, i) => i);
+
+  // Fan out rows confirmed for a multi-value split (precommit-warnings.ts's
+  // multi_value kind, resolved via CommitView's MultiValueResolver) BEFORE
+  // anything else touches preValidatedRows. Mirrors @eq/confirm-ui's
+  // computeCommitReady split_row resolution — same "copy the row, override
+  // just the split field" shape — just moved earlier so FK resolution and
+  // validate() both see the expanded set like any other rows, with no
+  // special-casing needed downstream (validate()'s own valid/flagged/
+  // rejected arrays end up naturally 1:1 with what it was given, so the
+  // later toCommit/committedIds zip below never has to know a split happened
+  // at all).
+  //
+  // Known, deliberate scope cut: every split sibling reports the SAME
+  // original source_row_index (they did all come from that one spreadsheet
+  // row) — there's no split_index to disambiguate which sibling, unlike
+  // confirm-ui's CommittableRow. Only matters if two siblings of the same
+  // split BOTH independently end up flagged/rejected; rare enough not to
+  // justify threading a new field through EntityCommitResult for it here.
+  if (args.splitFields && args.splitFields.length > 0) {
+    const splitMapping = inferMapping(args.sheet.headerRow, args.schema);
+    const headerFor = new Map<string, string>();
+    for (const [header, field] of Object.entries(splitMapping)) {
+      if (field && !headerFor.has(field)) headerFor.set(field, header);
+    }
+    const nextRows: Record<string, unknown>[] = [];
+    const nextOrigin: number[] = [];
+    preValidatedRows.forEach((row, i) => {
+      let expandedThisRow = false;
+      for (const field of args.splitFields!) {
+        const header = headerFor.get(field);
+        if (!header) continue;
+        const raw = row[header];
+        if (typeof raw !== "string") continue;
+        const segments = raw.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+        if (segments.length >= 2) {
+          for (const seg of segments) {
+            nextRows.push({ ...row, [header]: seg });
+            nextOrigin.push(resolvedToOriginalIndex[i]!);
+          }
+          expandedThisRow = true;
+          break; // one split per row — a schema hinting 2+ multi-value fields on the same row is not a shape this handles
+        }
+      }
+      if (!expandedThisRow) {
+        nextRows.push(row);
+        nextOrigin.push(resolvedToOriginalIndex[i]!);
+      }
+    });
+    preValidatedRows = nextRows;
+    resolvedToOriginalIndex = nextOrigin;
+  }
 
   if ((args.entity === "site" || args.entity === "contact") && args.customerIdMap) {
     const { resolved, missedIndices } = resolveCustomerFk(preValidatedRows, args.customerIdMap);
@@ -957,15 +1026,17 @@ async function commitOneEntity(args: CommitOneEntityArgs): Promise<EntityCommitR
         ? `fk_no_match on customer_id: no customer found for ID "${firstId}"`
         : `fk_no_match on customer_id: row has no customer ID — cannot resolve FK`;
       fkMissedRejections.push({
-        source_row_index: idx,
+        source_row_index: resolvedToOriginalIndex[idx]!,
         reasons: [reason],
       });
     }
+    const nextOriginIndex: number[] = [];
     let cursor = 0;
     for (let i = 0; i < preValidatedRows.length; i++) {
-      if (!missedSet.has(i)) resolvedToOriginalIndex[cursor++] = i;
+      if (!missedSet.has(i)) nextOriginIndex[cursor++] = resolvedToOriginalIndex[i]!;
     }
     preValidatedRows = resolved;
+    resolvedToOriginalIndex = nextOriginIndex;
   }
 
   if (args.entity === "licence" && args.staffIdMap) {
@@ -980,20 +1051,22 @@ async function commitOneEntity(args: CommitOneEntityArgs): Promise<EntityCommitR
         ? `fk_no_match on staff_id: no staff found for ID "${rawId}"`
         : `fk_no_match on staff_id: row has no staff identifier — cannot resolve FK`;
       fkMissedRejections.push({
-        source_row_index: idx,
+        source_row_index: resolvedToOriginalIndex[idx]!,
         reasons: [reason],
       });
     }
-    let cursor = resolvedToOriginalIndex.length;
+    const nextOriginIndex: number[] = [];
+    let cursor = 0;
     for (let i = 0; i < preValidatedRows.length; i++) {
-      if (!missedSet.has(i)) resolvedToOriginalIndex[cursor++] = i;
+      if (!missedSet.has(i)) nextOriginIndex[cursor++] = resolvedToOriginalIndex[i]!;
     }
     preValidatedRows = resolved;
+    resolvedToOriginalIndex = nextOriginIndex;
   }
 
-  // Remap validate() source_row_index back to original sheet index.
-  const remapIdx = (i: number): number =>
-    resolvedToOriginalIndex.length > 0 ? (resolvedToOriginalIndex[i] ?? i) : i;
+  // Remap validate() source_row_index back to original sheet index — always
+  // populated now (identity when nothing transformed preValidatedRows).
+  const remapIdx = (i: number): number => resolvedToOriginalIndex[i] ?? i;
 
   // Header → canonical field mapping via x-eq-source-aliases, with any
   // manual per-header override (see CommitOptions.manualMapping) taking
@@ -1300,6 +1373,7 @@ export async function commitBundleToCanonical(opts: CommitOptions): Promise<Comm
       customerIdMap,
       staffIdMap,
       manualMapping: opts.manualMapping?.[entity],
+      splitFields: opts.splitFields?.[entity],
       chunkSize: opts.chunkSize,
       onProgress: opts.onProgress,
       stageCommit: opts.stageCommit,

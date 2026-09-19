@@ -4891,3 +4891,142 @@ button.eq-primary:hover {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* ---- Precommit question queue — one thing to check at a time ---- */
+
+.eq-qa-queue {
+  margin-top: 16px;
+  border: 1px solid var(--eq-line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--eq-paper);
+}
+
+.eq-qa-queue__trail {
+  list-style: none;
+  margin: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--eq-line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.eq-qa-queue__trail-item {
+  font-size: 13px;
+  color: var(--eq-ink);
+  opacity: 0.65;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.eq-qa-queue__trail-check {
+  color: var(--eq-ok);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.eq-qa-queue__current {
+  padding: 16px;
+  background: var(--eq-ice);
+}
+
+.eq-qa-queue__progress {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--eq-deep);
+  margin-bottom: 8px;
+}
+
+.eq-qa-queue__question {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--eq-ink);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.eq-qa-queue__buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.eq-qa-queue__btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 13.5px;
+  cursor: pointer;
+  border: 1px solid var(--eq-sky);
+  background: var(--eq-sky);
+  color: white;
+}
+
+.eq-qa-queue__btn:hover {
+  background: var(--eq-deep);
+  border-color: var(--eq-deep);
+}
+
+.eq-qa-queue__btn--secondary {
+  background: var(--eq-paper);
+  color: var(--eq-ink);
+  border-color: var(--eq-line);
+}
+
+.eq-qa-queue__btn--secondary:hover {
+  border-color: var(--eq-deep);
+  color: var(--eq-deep);
+}
+
+.eq-qa-queue__pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.eq-qa-queue__pick select {
+  font: inherit;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--eq-line);
+  background: var(--eq-paper);
+  color: var(--eq-ink);
+}
+
+.eq-qa-queue__done {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--eq-ok);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.eq-qa-queue__done-icon {
+  font-size: 16px;
+}
+
+.eq-qa-queue__save-anyway {
+  border: 0;
+  background: none;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--eq-ink);
+  opacity: 0.6;
+  text-decoration: underline;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.eq-qa-queue__save-anyway:hover {
+  opacity: 1;
+}

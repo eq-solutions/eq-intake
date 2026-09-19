@@ -173,6 +173,49 @@ export function describeWarning(w: PreCommitWarning): string {
  * unmapped_required warning, or a problem file is removed — so an earlier
  * "I've checked these" never silently covers a DIFFERENT problem.
  */
+export type DuplicateRowsResolution = "merge" | "keep_both";
+export type MultiValueResolution = "split" | "keep_combined";
+
+/** Resolution key for a duplicate_rows pair — order matches the warning's own rowIndices. */
+export function duplicateRowsKey(role: RoleName, rowIndices: [number, number]): string {
+  return `${role}:${rowIndices[0]}:${rowIndices[1]}`;
+}
+
+/**
+ * Resolution key for a multi_value warning — field-level (one candidate
+ * already covers every affected row in that column), keyed by slotLabel
+ * rather than role since the multi_value variant carries no role of its own
+ * (see PreCommitWarning's union) — a slot's file name is unique per bundle.
+ */
+export function multiValueKey(slotLabel: string, field: string): string {
+  return `${slotLabel}:${field}`;
+}
+
+/**
+ * Drops any duplicate_rows/multi_value warning the user already resolved —
+ * a real fix, same principle unmapped_required's column-pick and
+ * duplicate_existing's Skip/Keep already follow. low_confidence and
+ * unmapped_required aren't touched here: the former resolves by the slot's
+ * role/method actually changing (DetectionLine's own picker), the latter by
+ * manualMappings actually satisfying collectPreCommitWarnings, so both
+ * already disappear on their own without a separate resolution map.
+ */
+export function filterResolvedWarnings(
+  warnings: PreCommitWarning[],
+  duplicateRowsResolutions: Record<string, DuplicateRowsResolution>,
+  multiValueResolutions: Record<string, MultiValueResolution>,
+): PreCommitWarning[] {
+  return warnings.filter((w) => {
+    if (w.kind === "duplicate_rows") {
+      return !duplicateRowsResolutions[duplicateRowsKey(w.role, w.rowIndices)];
+    }
+    if (w.kind === "multi_value") {
+      return !multiValueResolutions[multiValueKey(w.slotLabel, w.field)];
+    }
+    return true;
+  });
+}
+
 export function warningsFingerprint(warnings: PreCommitWarning[]): string {
   return warnings
     .map((w) => {

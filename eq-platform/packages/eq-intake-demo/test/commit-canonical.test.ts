@@ -786,6 +786,68 @@ describe("commitBundleToCanonical — multi_value_candidate flag", () => {
     // for an unresolved split_row flag.
     expect(siteResult?.committedCount).toBe(1);
   });
+
+  it("splits into two rows when the user confirms the split, mirroring confirm-ui's split_row", async () => {
+    const state: MockState = { rpcCalls: [] };
+    const supabase = makeMockSupabase(state);
+
+    const SITE_SHEET = {
+      sheetName: "csv",
+      headerRow: ["Site Name"],
+      rows: [{ "Site Name": "Wollongong, Malabar" }],
+      meta: {
+        encoding: "utf-8", delimiter: ",", totalRows: 1,
+        emptyRowsSkipped: 0, malformedRows: 0, malformed: [], bomDetected: false,
+      },
+    };
+
+    const result = await commitBundleToCanonical({
+      supabase,
+      bundle: { site: SITE_SHEET as never },
+      tenantId: TENANT,
+      splitFields: { site: ["name"] },
+    });
+
+    const siteResult = result.perEntity.find((r) => r.entity === "site");
+    expect(siteResult?.committedCount).toBe(2);
+    expect(siteResult?.flaggedCount).toBe(0); // confirmed and split — no longer something to flag
+
+    const commitCall = state.rpcCalls.find((c) => c.name === "eq_intake_commit_batch");
+    const sentNames = (commitCall?.params as { p_rows: Array<{ name: string }> }).p_rows.map((r) => r.name);
+    expect(sentNames).toEqual(["Wollongong", "Malabar"]);
+  });
+
+  it("a row after a split still reports its TRUE original row number when rejected, not an expanded-array position", async () => {
+    const state: MockState = { rpcCalls: [] };
+    const supabase = makeMockSupabase(state);
+
+    // Row 0 splits into 2 rows. Row 1 has no name at all — required field
+    // missing, rejected by validate(). In the expanded array this lands at
+    // position 2 (after the split's two siblings), but it must still be
+    // reported as row 1 — the row a human looking at their own spreadsheet
+    // would call "row 2" (1-based).
+    const SITE_SHEET = {
+      sheetName: "csv",
+      headerRow: ["Site Name"],
+      rows: [{ "Site Name": "Wollongong, Malabar" }, { "Site Name": "" }],
+      meta: {
+        encoding: "utf-8", delimiter: ",", totalRows: 2,
+        emptyRowsSkipped: 0, malformedRows: 0, malformed: [], bomDetected: false,
+      },
+    };
+
+    const result = await commitBundleToCanonical({
+      supabase,
+      bundle: { site: SITE_SHEET as never },
+      tenantId: TENANT,
+      splitFields: { site: ["name"] },
+    });
+
+    const siteResult = result.perEntity.find((r) => r.entity === "site");
+    expect(siteResult?.committedCount).toBe(2);
+    expect(siteResult?.rejectedCount).toBe(1);
+    expect(siteResult?.rejectedRows[0]?.source_row_index).toBe(1);
+  });
 });
 
 describe("commitBundleToCanonical — stageCommit (the /intake vs /intake/core parity fix)", () => {

@@ -50,15 +50,19 @@ import {
 } from "../canonical/commit-canonical.js";
 import {
   collectPreCommitWarnings,
-  describeWarning,
   warningsFingerprint,
-  type PreCommitWarning,
+  filterResolvedWarnings,
+  duplicateRowsKey,
+  multiValueKey,
+  type DuplicateRowsResolution,
+  type MultiValueResolution,
 } from "../shared/precommit-warnings.js";
 import {
   useLiveDuplicateWarnings,
   liveDuplicateKey,
   skippedRowIndices,
 } from "../shared/use-live-duplicate-warnings.js";
+import { PrecommitQuestionQueue, type ResolvedLogEntry } from "../shared/PrecommitQuestionQueue.js";
 import type { RoleName } from "../rollup/roles.js";
 
 export interface IntakeModuleProps {
@@ -487,6 +491,14 @@ function CommitView({
   // enforced by setManualPick below, not by this state's type.
   const [manualMappings, setManualMappings] = useState<Partial<Record<RoleName, Record<string, string | null>>>>({});
 
+  // Running trail of answered questions, oldest first — purely presentational
+  // (PrecommitQuestionQueue's "✓ ..." list), never read back for logic. Each
+  // resolver below appends one entry when it fires.
+  const [resolvedLog, setResolvedLog] = useState<ResolvedLogEntry[]>([]);
+  const logResolved = useCallback((key: string, summary: string) => {
+    setResolvedLog((prev) => [...prev, { key, summary }]);
+  }, []);
+
   const setManualPick = useCallback((role: RoleName, field: string, header: string | null) => {
     setManualMappings((prev) => {
       const roleMap = { ...(prev[role] ?? {}) };
@@ -496,7 +508,10 @@ function CommitView({
       if (header) roleMap[header] = field;
       return { ...prev, [role]: roleMap };
     });
-  }, []);
+    if (header) {
+      logResolved(`map:${role}:${field}`, `Mapped "${header}" → ${field.replace(/_/g, " ")}`);
+    }
+  }, [logResolved]);
 
   // Per-role, per-row resolution of a duplicate_existing warning — "skip"
   // (already in EQ — exclude this row from the commit) or "keep" (different
@@ -504,7 +519,48 @@ function CommitView({
   const [duplicateResolutions, setDuplicateResolutions] = useState<Record<string, "skip" | "keep">>({});
   const resolveDuplicate = useCallback((role: RoleName, rowIndex: number, action: "skip" | "keep") => {
     setDuplicateResolutions((prev) => ({ ...prev, [liveDuplicateKey(role, rowIndex)]: action }));
-  }, []);
+    logResolved(
+      liveDuplicateKey(role, rowIndex),
+      action === "skip"
+        ? `Skipped row ${rowIndex + 1} — already in EQ`
+        : `Kept row ${rowIndex + 1} — different record`,
+    );
+  }, [logResolved]);
+
+  // Per-role, per-row-pair resolution of a duplicate_rows (within-file)
+  // question — "merge" drops the LATER row (rowIndices[1]) from the commit,
+  // "keep_both" just dismisses the question. Keyed duplicateRowsKey(role, pair).
+  const [duplicateRowsResolutions, setDuplicateRowsResolutions] = useState<Record<string, DuplicateRowsResolution>>({});
+  const resolveDuplicateRows = useCallback(
+    (role: RoleName, rowIndices: [number, number], action: DuplicateRowsResolution) => {
+      const key = duplicateRowsKey(role, rowIndices);
+      setDuplicateRowsResolutions((prev) => ({ ...prev, [key]: action }));
+      logResolved(
+        key,
+        action === "merge"
+          ? `Merged rows ${rowIndices[0] + 1} and ${rowIndices[1] + 1}`
+          : `Kept rows ${rowIndices[0] + 1} and ${rowIndices[1] + 1} — different records`,
+      );
+    },
+    [logResolved],
+  );
+
+  // Per-slot, per-field resolution of a multi_value question — "split" fans
+  // every affected row in that column into one row per comma-separated value
+  // at commit time (commitBundleToCanonical's splitFields), "keep_combined"
+  // just dismisses the question (today's existing default behaviour).
+  // Keyed multiValueKey(slotLabel, field) — multi_value carries no role.
+  const [splitResolutions, setSplitResolutions] = useState<Record<string, MultiValueResolution>>({});
+  const resolveMultiValue = useCallback((slotLabel: string, field: string, action: MultiValueResolution) => {
+    const key = multiValueKey(slotLabel, field);
+    setSplitResolutions((prev) => ({ ...prev, [key]: action }));
+    logResolved(
+      key,
+      action === "split"
+        ? `Split "${field.replace(/_/g, " ")}" into separate rows`
+        : `Kept "${field.replace(/_/g, " ")}" as one combined value`,
+    );
+  }, [logResolved]);
 
   // Rows that look like a record already saved in EQ — separate from the
   // four in-file-only warnings below since it needs a live read (see
@@ -518,21 +574,36 @@ function CommitView({
   );
 
   // Pre-commit review gate — shaky classifications, likely multi-value
-  // cells, required fields no column filled, and now rows that look like an
-  // existing EQ record, aggregated across every slot. Mirrors @eq/confirm-ui's
+  // cells, required fields no column filled, in-file near-duplicates, and
+  // rows that look like an existing EQ record, aggregated across every slot
+  // and filtered down to whatever's still unresolved. Mirrors @eq/confirm-ui's
   // MappingTable checkbox-acknowledgment pattern, since eq-shell's real
-  // intake pipeline never renders MappingTable itself. Re-derived from
-  // bundle.slots + manualMappings (+ the live-duplicate hook's own result)
-  // every render, so adding/removing/reclassifying a file, or picking a
-  // column, always reflects the current set, not a stale snapshot.
-  const warnings = useMemo(
-    () => [...collectPreCommitWarnings(bundle.slots, manualMappings), ...liveDuplicateWarnings],
-    [bundle.slots, manualMappings, liveDuplicateWarnings],
+  // intake pipeline never renders MappingTable itself. Re-derived every
+  // render, so adding/removing/reclassifying a file, or answering a
+  // question, always reflects the current set, not a stale snapshot.
+  const allWarnings = useMemo(
+    () =>
+      filterResolvedWarnings(
+        [...collectPreCommitWarnings(bundle.slots, manualMappings), ...liveDuplicateWarnings],
+        duplicateRowsResolutions,
+        splitResolutions,
+      ),
+    [bundle.slots, manualMappings, liveDuplicateWarnings, duplicateRowsResolutions, splitResolutions],
   );
-  const warningsKey = useMemo(() => warningsFingerprint(warnings), [warnings]);
+  // low_confidence is deliberately excluded from the sequential queue — it
+  // already resolves inline via DetectionLine where the file was dropped,
+  // and showing it again here with no button of its own would just be an
+  // unanswerable second copy of the same question. It still counts toward
+  // the gate below (allWarnings), so Save stays blocked until it resolves
+  // too, same as today.
+  const queueWarnings = useMemo(
+    () => allWarnings.filter((w) => w.kind !== "low_confidence"),
+    [allWarnings],
+  );
+  const warningsKey = useMemo(() => warningsFingerprint(allWarnings), [allWarnings]);
   const [acknowledgedKey, setAcknowledgedKey] = useState<string | null>(null);
-  const warningsAcknowledged = warnings.length === 0 || acknowledgedKey === warningsKey;
-  const saveBlocked = warnings.length > 0 && !warningsAcknowledged;
+  const warningsAcknowledged = allWarnings.length === 0 || acknowledgedKey === warningsKey;
+  const saveBlocked = allWarnings.length > 0 && !warningsAcknowledged;
 
   const commit = async () => {
     if (!supabase) return;
@@ -547,9 +618,15 @@ function CommitView({
         setError(`Two files look like ${slot.role}s. Remove one before saving.`);
         return;
       }
-      // Rows resolved "skip" on a duplicate_existing warning (already in EQ
-      // under a different spelling) never reach the commit RPC at all.
+      // Rows resolved "skip" on a duplicate_existing question (already in EQ
+      // under a different spelling), plus the later row of any duplicate_rows
+      // pair resolved "merge", never reach the commit RPC at all.
       const skip = skippedRowIndices(slot.role, duplicateResolutions);
+      for (const [pairKey, action] of Object.entries(duplicateRowsResolutions)) {
+        if (action !== "merge") continue;
+        const [pairRole, , laterStr] = pairKey.split(":");
+        if (pairRole === slot.role) skip.add(Number(laterStr));
+      }
       commitBundle[key] = skip.size === 0
         ? slot.sheet
         : { ...slot.sheet, rows: slot.sheet.rows.filter((_, i) => !skip.has(i)) };
@@ -570,6 +647,22 @@ function CommitView({
       .map((s) => s.file.name)
       .join("+");
 
+    // Fields resolved "split", grouped by role — multi_value questions are
+    // keyed by slotLabel (they carry no role of their own), so resolve each
+    // back to its slot's role via bundle.slots before handing it to
+    // commitBundleToCanonical, which needs it keyed by CanonicalEntity.
+    const splitFields: Partial<Record<RoleName, string[]>> = {};
+    for (const [key, action] of Object.entries(splitResolutions)) {
+      if (action !== "split") continue;
+      const separatorIdx = key.lastIndexOf(":");
+      const slotLabel = key.slice(0, separatorIdx);
+      const field = key.slice(separatorIdx + 1);
+      const owningSlot = bundle.slots.find((s) => s.file.name === slotLabel && s.role !== "unknown");
+      if (!owningSlot) continue;
+      const role = owningSlot.role as RoleName;
+      (splitFields[role] ??= []).push(field);
+    }
+
     setBusy(true);
     setProgressMsg(null);
     try {
@@ -579,6 +672,7 @@ function CommitView({
         tenantId,
         createdBy,
         manualMapping: manualMappings,
+        splitFields,
         sourceFilename: filename,
         onProgress: (msg) => setProgressMsg(msg),
         stageCommit,
@@ -615,40 +709,32 @@ function CommitView({
         </div>
       )}
 
-      {!result && warnings.length > 0 && (
-        <div className="eq-intake-precommit-warning" role="alert">
-          <strong>Check these before saving</strong>
-          <ul>
-            {warnings.map((w, i) => (
-              <li key={i}>
-                {describeWarning(w)}
-                {w.kind === "unmapped_required" && (
-                  <UnmappedFieldPicker
-                    warning={w}
-                    currentHeader={
-                      Object.entries(manualMappings[w.role] ?? {}).find(([, f]) => f === w.field)?.[0] ?? ""
-                    }
-                    onPick={(header) => setManualPick(w.role, w.field, header || null)}
-                  />
-                )}
-                {w.kind === "duplicate_existing" && (
-                  <ExistingDuplicateResolver
-                    warning={w}
-                    onResolve={(action) => resolveDuplicate(w.role, w.rowIndex, action)}
-                  />
-                )}
-              </li>
-            ))}
-          </ul>
-          <label className="eq-intake-precommit-warning__ack">
-            <input
-              type="checkbox"
-              checked={warningsAcknowledged}
-              onChange={(e) => setAcknowledgedKey(e.target.checked ? warningsKey : null)}
-            />
-            I've checked these — save anyway.
-          </label>
-        </div>
+      {!result && (
+        <PrecommitQuestionQueue
+          warnings={queueWarnings}
+          resolvedLog={resolvedLog}
+          manualMappings={manualMappings}
+          onPickColumn={setManualPick}
+          onResolveDuplicateExisting={resolveDuplicate}
+          onResolveDuplicateRows={resolveDuplicateRows}
+          onResolveMultiValue={resolveMultiValue}
+        />
+      )}
+
+      {/* Power-user escape hatch — same underlying gate as before (one
+          acknowledgment unblocks Save regardless of what's still open), just
+          de-emphasised now that answering each question is the guided,
+          primary path instead of the only one. Nothing lost, only reordered:
+          a messy file with many flags no longer requires clicking through
+          every single one just to get past the gate. */}
+      {!result && allWarnings.length > 0 && !warningsAcknowledged && (
+        <button
+          type="button"
+          className="eq-qa-queue__save-anyway"
+          onClick={() => setAcknowledgedKey(warningsKey)}
+        >
+          Skip the questions — save anyway
+        </button>
       )}
 
       {!result && (
@@ -719,63 +805,6 @@ function CommitView({
   );
 }
 
-/**
- * "Which column is X?" dropdown for one unmapped_required warning. Offers
- * every header in that slot's sheet, plus a blank "not picked yet" option so
- * nothing is silently pre-selected. Picking a header removes the warning
- * (see collectPreCommitWarnings's manualMappings param) rather than just
- * acknowledging it, since a pick is an actual fix, not a known limitation.
- */
-function UnmappedFieldPicker({
-  warning,
-  currentHeader,
-  onPick,
-}: {
-  warning: Extract<PreCommitWarning, { kind: "unmapped_required" }>;
-  currentHeader: string;
-  onPick: (header: string) => void;
-}): JSX.Element {
-  return (
-    <select
-      className="eq-intake-precommit-warning__pick"
-      aria-label={`Which column is ${warning.field.replace(/_/g, " ")}?`}
-      value={currentHeader}
-      onChange={(e) => onPick(e.target.value)}
-    >
-      <option value="">— pick a column —</option>
-      {warning.availableHeaders.map((h) => (
-        <option key={h} value={h}>
-          {h}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-/**
- * Skip / Keep for one duplicate_existing warning — a real resolution, same
- * as UnmappedFieldPicker's column pick, not just an acknowledgment. "Skip"
- * excludes this row from the commit (see commit()'s skippedRowIndices use);
- * "Keep" dismisses the warning as a different, genuinely new record. Either
- * pick removes the warning from the list — resolveDuplicate feeds
- * useLiveDuplicateWarnings's own filter, same as manualMappings does for
- * unmapped_required.
- */
-function ExistingDuplicateResolver({
-  warning,
-  onResolve,
-}: {
-  warning: Extract<PreCommitWarning, { kind: "duplicate_existing" }>;
-  onResolve: (action: "skip" | "keep") => void;
-}): JSX.Element {
-  return (
-    <span className="eq-intake-precommit-warning__resolve">
-      <button type="button" onClick={() => onResolve("skip")}>
-        Skip — already in EQ
-      </button>
-      <button type="button" onClick={() => onResolve("keep")}>
-        Keep — different record
-      </button>
-    </span>
-  );
-}
+// UnmappedFieldPicker and ExistingDuplicateResolver now live in
+// ../shared/PrecommitQuestionQueue.tsx, alongside the sequential queue that
+// renders them — see that file.
