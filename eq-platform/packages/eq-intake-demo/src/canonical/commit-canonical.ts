@@ -25,7 +25,14 @@
 
 import { validate } from "@eq/validation";
 import type { ParsedSheet } from "@eq/intake";
-import { dice, HIGH_SIM, normaliseCompanyName } from "@eq/intake";
+import {
+  dice,
+  HIGH_SIM,
+  normaliseCompanyName,
+  identityKeyFor,
+  matchAgainstLiveRecords,
+  type LiveRowLookup,
+} from "@eq/intake";
 
 // Real canonical JSON Schemas (the same ones used to generate the DB tables).
 // Imported as JSON modules — Vite + tsc both handle this via resolveJsonModule.
@@ -223,7 +230,7 @@ const CANONICAL_SCHEMAS: Record<CanonicalEntity, JsonSchema> = {
   licence: licenceJsonSchema as unknown as JsonSchema,
 };
 
-const ENTITY_TABLE: Record<CanonicalEntity, string> = {
+export const ENTITY_TABLE: Record<CanonicalEntity, string> = {
   customer: "customers",
   site: "sites",
   contact: "contacts",
@@ -478,6 +485,102 @@ export function previewDuplicateRows(
       }
     }
   }
+  return candidates;
+}
+
+export interface DuplicateAgainstLiveCandidate {
+  /** 0-based index into sheet.rows of the new row that looks like an existing record. */
+  rowIndex: number;
+  /** The new row's identity value, before normalising. */
+  newValue: string;
+  /** Primary key of the matching already-saved EQ record. */
+  existingId: string;
+  /** The existing record's identity value, for display. */
+  existingLabel: string;
+  /** Dice similarity between the two normalised values (1 = identical). */
+  similarity: number;
+}
+
+/**
+ * Pre-commit scan for rows that look like a record ALREADY SAVED in EQ —
+ * the gap previewDuplicateRows's own doc comment names explicitly (no RPC to
+ * read existing customers). That RPC exists now: eq_tidy_read_entity, already
+ * live for the health dashboard's own duplicate sweep (@eq/intake's
+ * detectAllDuplicates). `lookup` is that same read, supplied by the host
+ * (IntakeModule) rather than called from here — this package stays DB-free,
+ * mirroring dedup.ts's DupLookup pattern for assets.
+ *
+ * Reuses identityKeyFor() — the exact per-entity normalisation
+ * (normaliseCompanyName for customers, normalisePersonName for staff/
+ * contacts, name+address for sites) the health dashboard's own clustering
+ * already treats as "the same real-world record" — so a new row and an
+ * existing row are judged by one definition of "likely duplicate", not a
+ * second copy of the rule previewDuplicateRows uses for in-file pairs.
+ *
+ * Never throws: a failed lookup (no supabase, RPC error, offline) degrades
+ * to no candidates rather than blocking the rest of the precommit review —
+ * this is an enrichment on top of the existing gate, not a new hard block.
+ */
+export async function previewDuplicatesAgainstLive(
+  sheet: ParsedSheet,
+  entity: CanonicalEntity,
+  lookup: LiveRowLookup,
+  manualMapping?: Record<string, string | null>,
+  schemas?: Partial<Record<CanonicalEntity, JsonSchema>>,
+): Promise<DuplicateAgainstLiveCandidate[]> {
+  const identityFields = IDENTITY_FIELDS[entity];
+  if (!identityFields) return []; // licence — no identity fields defined, same boundary as previewDuplicateRows
+
+  const schema = schemas?.[entity] ?? CANONICAL_SCHEMAS[entity];
+  const mapping = { ...inferMapping(sheet.headerRow, schema), ...(manualMapping ?? {}) };
+  const headerFor = new Map<string, string>();
+  for (const [header, field] of Object.entries(mapping)) {
+    if (field && !headerFor.has(field)) headerFor.set(field, header);
+  }
+
+  const rows = sheet.rows as Record<string, unknown>[];
+  const rawValues: (string | null)[] = rows.map((row) => {
+    const parts = identityFields
+      .map((f) => headerFor.get(f))
+      .filter((h): h is string => h != null)
+      .map((h) => String(row[h] ?? "").trim())
+      .filter((v) => v.length > 0);
+    return parts.length > 0 ? parts.join(" ") : null;
+  });
+
+  const tableName = ENTITY_TABLE[entity];
+  const newKeys: (string | null)[] = rows.map((row, i) => {
+    if (rawValues[i] == null) return null;
+    const canonicalRow: Record<string, unknown> = {};
+    for (const f of identityFields) {
+      const h = headerFor.get(f);
+      if (h) canonicalRow[f] = row[h];
+    }
+    const key = identityKeyFor(tableName, canonicalRow);
+    return key.length >= 2 ? key : null;
+  });
+
+  if (newKeys.every((k) => k === null)) return [];
+
+  let matches: Awaited<ReturnType<typeof matchAgainstLiveRecords>>;
+  try {
+    matches = await matchAgainstLiveRecords(tableName, newKeys, lookup);
+  } catch {
+    return [];
+  }
+
+  const candidates: DuplicateAgainstLiveCandidate[] = [];
+  matches.forEach((m, i) => {
+    if (m && rawValues[i] != null) {
+      candidates.push({
+        rowIndex: i,
+        newValue: rawValues[i]!,
+        existingId: m.id,
+        existingLabel: m.label,
+        similarity: m.similarity,
+      });
+    }
+  });
   return candidates;
 }
 

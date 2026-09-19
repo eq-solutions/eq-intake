@@ -8,8 +8,12 @@
  * rows each carry a customer link.
  */
 
-import { describe, it, expect } from "vitest";
-import { _detectForEntity as detectForEntity } from "../src/duplicate-detect.js";
+import { describe, it, expect, vi } from "vitest";
+import {
+  _detectForEntity as detectForEntity,
+  matchAgainstLiveRecords,
+  identityKeyFor,
+} from "../src/duplicate-detect.js";
 
 // Mirrors the live ehow shapes seen on 2026-07-13 (ids/customers anonymised).
 const SY9_ROWS = [
@@ -159,5 +163,66 @@ describe("detectForEntity — backward compatibility + isolation", () => {
     const report = detectForEntity("sites", rows);
     expect(report.clusters).toHaveLength(0);
     expect(report.needs_reconcile).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// matchAgainstLiveRecords — intake-time "does this already exist"
+// ---------------------------------------------------------------------------
+
+const EXISTING_CUSTOMERS = [
+  { customer_id: "cust-1", company_name: "ERGO GROUP PTY LTD", active: true },
+  { customer_id: "cust-2", company_name: "Kilo Group", active: true },
+];
+
+describe("matchAgainstLiveRecords", () => {
+  it("matches a new row against an existing one under trivially different spelling", async () => {
+    const lookup = vi.fn(async () => EXISTING_CUSTOMERS);
+    const results = await matchAgainstLiveRecords("customers", ["ergo group"], lookup);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ id: "cust-1", label: "ERGO GROUP PTY LTD" });
+    expect(results[0]!.similarity).toBeGreaterThanOrEqual(0.85);
+    expect(lookup).toHaveBeenCalledWith("customers");
+  });
+
+  it("does not match 'SKS' against 'SKS Technology' — same boundary as the within-file check", async () => {
+    const lookup = vi.fn(async () => [
+      { customer_id: "cust-9", company_name: "SKS Technology", active: true },
+    ]);
+    const results = await matchAgainstLiveRecords("customers", ["SKS"], lookup);
+    expect(results).toEqual([null]);
+  });
+
+  it("returns null for a row with no live match, alongside a matched row in the same call", async () => {
+    // Callers pass already-normalised keys (identityKeyFor's own output) —
+    // matchAgainstLiveRecords compares like-for-like, it doesn't normalise
+    // the "new" side itself. See previewDuplicatesAgainstLive for the real
+    // caller shape.
+    const lookup = vi.fn(async () => EXISTING_CUSTOMERS);
+    const keys = [
+      identityKeyFor("customers", { company_name: "Kilo Group" }),
+      identityKeyFor("customers", { company_name: "Orise" }),
+    ];
+    const results = await matchAgainstLiveRecords("customers", keys, lookup);
+    expect(results[0]).toMatchObject({ id: "cust-2" });
+    expect(results[1]).toBeNull();
+  });
+
+  it("never calls the lookup when no candidate key has usable identity data", async () => {
+    const lookup = vi.fn(async () => EXISTING_CUSTOMERS);
+    const results = await matchAgainstLiveRecords("customers", [null, ""], lookup);
+    expect(results).toEqual([null, null]);
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it("picks the highest-similarity live row when more than one is close", async () => {
+    const lookup = vi.fn(async () => [
+      { customer_id: "cust-a", company_name: "Ergo Group Holdings", active: true },
+      { customer_id: "cust-b", company_name: "Ergo Group Pty Ltd", active: true },
+    ]);
+    const key = identityKeyFor("customers", { company_name: "Ergo Group Pty Ltd" });
+    const results = await matchAgainstLiveRecords("customers", [key], lookup);
+    expect(results[0]).toMatchObject({ id: "cust-b" });
+    expect(results[0]!.similarity).toBe(1); // exact match after normalisation, not just closest
   });
 });

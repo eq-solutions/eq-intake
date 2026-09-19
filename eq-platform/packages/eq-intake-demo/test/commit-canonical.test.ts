@@ -18,13 +18,14 @@
  * Tests verify the RPC call shapes rather than from() call shapes.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   commitBundleToCanonical,
   inferMapping,
   previewMultiValueCandidates,
   previewUnmappedRequiredFields,
   previewDuplicateRows,
+  previewDuplicatesAgainstLive,
   type SupabaseLikeClient,
   type StageCommitFn,
 } from "../src/canonical/commit-canonical.js";
@@ -641,6 +642,74 @@ describe("previewDuplicateRows", () => {
       { Name: "company_name" },
     );
     expect(candidates).toHaveLength(1);
+  });
+});
+
+describe("previewDuplicatesAgainstLive", () => {
+  const sheet = (rows: Record<string, unknown>[], headerRow: string[]) => ({
+    sheetName: "csv",
+    headerRow,
+    rows,
+    meta: {
+      encoding: "utf-8", delimiter: ",", totalRows: rows.length,
+      emptyRowsSkipped: 0, malformedRows: 0, malformed: [], bomDetected: false,
+    },
+  });
+
+  it("flags a new row that looks like a customer already saved in EQ — the Madagins case", async () => {
+    const lookup = vi.fn(async (entity: string) => {
+      expect(entity).toBe("customers"); // singular CanonicalEntity -> plural table name
+      return [{ customer_id: "cust-1", company_name: "ERGO GROUP PTY LTD", active: true }];
+    });
+    const candidates = await previewDuplicatesAgainstLive(
+      sheet([{ Clients: "Ergo Group" }], ["Clients"]) as never,
+      "customer",
+      lookup,
+      { Clients: "company_name" },
+    );
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({
+      rowIndex: 0,
+      newValue: "Ergo Group",
+      existingId: "cust-1",
+      existingLabel: "ERGO GROUP PTY LTD",
+    });
+    expect(lookup).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not flag a genuinely new customer", async () => {
+    const lookup = vi.fn(async () => [
+      { customer_id: "cust-1", company_name: "ERGO GROUP PTY LTD", active: true },
+    ]);
+    const candidates = await previewDuplicatesAgainstLive(
+      sheet([{ Clients: "D4C Water" }], ["Clients"]) as never,
+      "customer",
+      lookup,
+      { Clients: "company_name" },
+    );
+    expect(candidates).toEqual([]);
+  });
+
+  it("returns [] for licence without calling the lookup — no identity fields defined, same boundary as previewDuplicateRows", async () => {
+    const lookup = vi.fn(async () => []);
+    const candidates = await previewDuplicatesAgainstLive(
+      sheet([{ X: "a" }], ["X"]) as never,
+      "licence",
+      lookup,
+    );
+    expect(candidates).toEqual([]);
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it("degrades to [] rather than throwing when the live lookup fails", async () => {
+    const lookup = vi.fn(async () => { throw new Error("network error"); });
+    const candidates = await previewDuplicatesAgainstLive(
+      sheet([{ Clients: "Ergo Group" }], ["Clients"]) as never,
+      "customer",
+      lookup,
+      { Clients: "company_name" },
+    );
+    expect(candidates).toEqual([]);
   });
 });
 

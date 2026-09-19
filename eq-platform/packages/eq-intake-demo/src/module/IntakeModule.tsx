@@ -54,6 +54,11 @@ import {
   warningsFingerprint,
   type PreCommitWarning,
 } from "../shared/precommit-warnings.js";
+import {
+  useLiveDuplicateWarnings,
+  liveDuplicateKey,
+  skippedRowIndices,
+} from "../shared/use-live-duplicate-warnings.js";
 import type { RoleName } from "../rollup/roles.js";
 
 export interface IntakeModuleProps {
@@ -493,16 +498,36 @@ function CommitView({
     });
   }, []);
 
+  // Per-role, per-row resolution of a duplicate_existing warning — "skip"
+  // (already in EQ — exclude this row from the commit) or "keep" (different
+  // record — dismiss the warning). Keyed by liveDuplicateKey(role, rowIndex).
+  const [duplicateResolutions, setDuplicateResolutions] = useState<Record<string, "skip" | "keep">>({});
+  const resolveDuplicate = useCallback((role: RoleName, rowIndex: number, action: "skip" | "keep") => {
+    setDuplicateResolutions((prev) => ({ ...prev, [liveDuplicateKey(role, rowIndex)]: action }));
+  }, []);
+
+  // Rows that look like a record already saved in EQ — separate from the
+  // four in-file-only warnings below since it needs a live read (see
+  // shared/use-live-duplicate-warnings.ts); non-critical on failure, so it
+  // never blocks the rest of the gate.
+  const liveDuplicateWarnings = useLiveDuplicateWarnings(
+    supabase,
+    bundle.slots,
+    manualMappings,
+    duplicateResolutions,
+  );
+
   // Pre-commit review gate — shaky classifications, likely multi-value
-  // cells, and required fields no column filled, aggregated across every
-  // slot. Mirrors @eq/confirm-ui's MappingTable checkbox-acknowledgment
-  // pattern, since eq-shell's real intake pipeline never renders MappingTable
-  // itself. Re-derived from bundle.slots + manualMappings every render, so
-  // adding/removing/reclassifying a file, or picking a column, always
-  // reflects the current set, not a stale snapshot.
+  // cells, required fields no column filled, and now rows that look like an
+  // existing EQ record, aggregated across every slot. Mirrors @eq/confirm-ui's
+  // MappingTable checkbox-acknowledgment pattern, since eq-shell's real
+  // intake pipeline never renders MappingTable itself. Re-derived from
+  // bundle.slots + manualMappings (+ the live-duplicate hook's own result)
+  // every render, so adding/removing/reclassifying a file, or picking a
+  // column, always reflects the current set, not a stale snapshot.
   const warnings = useMemo(
-    () => collectPreCommitWarnings(bundle.slots, manualMappings),
-    [bundle.slots, manualMappings],
+    () => [...collectPreCommitWarnings(bundle.slots, manualMappings), ...liveDuplicateWarnings],
+    [bundle.slots, manualMappings, liveDuplicateWarnings],
   );
   const warningsKey = useMemo(() => warningsFingerprint(warnings), [warnings]);
   const [acknowledgedKey, setAcknowledgedKey] = useState<string | null>(null);
@@ -522,7 +547,12 @@ function CommitView({
         setError(`Two files look like ${slot.role}s. Remove one before saving.`);
         return;
       }
-      commitBundle[key] = slot.sheet;
+      // Rows resolved "skip" on a duplicate_existing warning (already in EQ
+      // under a different spelling) never reach the commit RPC at all.
+      const skip = skippedRowIndices(slot.role, duplicateResolutions);
+      commitBundle[key] = skip.size === 0
+        ? slot.sheet
+        : { ...slot.sheet, rows: slot.sheet.rows.filter((_, i) => !skip.has(i)) };
     }
     if (
       !commitBundle.customer &&
@@ -599,6 +629,12 @@ function CommitView({
                       Object.entries(manualMappings[w.role] ?? {}).find(([, f]) => f === w.field)?.[0] ?? ""
                     }
                     onPick={(header) => setManualPick(w.role, w.field, header || null)}
+                  />
+                )}
+                {w.kind === "duplicate_existing" && (
+                  <ExistingDuplicateResolver
+                    warning={w}
+                    onResolve={(action) => resolveDuplicate(w.role, w.rowIndex, action)}
                   />
                 )}
               </li>
@@ -713,5 +749,33 @@ function UnmappedFieldPicker({
         </option>
       ))}
     </select>
+  );
+}
+
+/**
+ * Skip / Keep for one duplicate_existing warning — a real resolution, same
+ * as UnmappedFieldPicker's column pick, not just an acknowledgment. "Skip"
+ * excludes this row from the commit (see commit()'s skippedRowIndices use);
+ * "Keep" dismisses the warning as a different, genuinely new record. Either
+ * pick removes the warning from the list — resolveDuplicate feeds
+ * useLiveDuplicateWarnings's own filter, same as manualMappings does for
+ * unmapped_required.
+ */
+function ExistingDuplicateResolver({
+  warning,
+  onResolve,
+}: {
+  warning: Extract<PreCommitWarning, { kind: "duplicate_existing" }>;
+  onResolve: (action: "skip" | "keep") => void;
+}): JSX.Element {
+  return (
+    <span className="eq-intake-precommit-warning__resolve">
+      <button type="button" onClick={() => onResolve("skip")}>
+        Skip — already in EQ
+      </button>
+      <button type="button" onClick={() => onResolve("keep")}>
+        Keep — different record
+      </button>
+    </span>
   );
 }

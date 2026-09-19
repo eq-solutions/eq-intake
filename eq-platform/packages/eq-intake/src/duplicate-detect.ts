@@ -114,7 +114,7 @@ export function dice(a: string, b: string): number {
 
 type EntityRow = Record<string, unknown>;
 
-const PK: Record<string, string> = {
+export const PK: Record<string, string> = {
   staff:     'staff_id',
   customers: 'customer_id',
   sites:     'site_id',
@@ -470,6 +470,71 @@ export async function detectAllDuplicates(
   return results.map(({ entity, data: rawData }) => {
     const rows = (rawData as EntityRow[] | null) ?? [];
     return detectForEntity(entity, rows);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Public: matchAgainstLiveRecords — intake-time "does this already exist"
+// ---------------------------------------------------------------------------
+
+export interface LiveIdentityMatch {
+  id: string;
+  label: string;
+  similarity: number;
+}
+
+/**
+ * Host-supplied read of an entity's current live rows — same shape
+ * detectAllDuplicates already gets from eq_tidy_read_entity, just scoped to
+ * one entity instead of all five. Kept as an injected function (mirroring
+ * dedup.ts's DupLookup) rather than this module taking a Supabase client
+ * directly, so @eq/intake stays DB-free and the host owns the actual RPC call.
+ */
+export type LiveRowLookup = (entity: string) => Promise<EntityRow[]>;
+
+/**
+ * For each candidate identity key (one per new, not-yet-committed row),
+ * find the best-matching already-saved record, if any is >= HIGH_SIM.
+ *
+ * Reuses the exact identityKeyFor()/dice()/HIGH_SIM this module already
+ * applies to live-vs-live clustering (detectForEntity) — a new row and an
+ * existing row count as "the same" under the same rule the health dashboard
+ * already uses, not a second definition of "likely duplicate".
+ *
+ * newIdentityKeys entries that are null/too-short (no usable identity data
+ * on that row) always resolve to null — never sent to the lookup, never
+ * matched. Skips the lookup entirely when nothing in the batch has a usable
+ * key, so an unrelated import (e.g. all sites, no customers) never triggers
+ * a live customers read.
+ */
+export async function matchAgainstLiveRecords(
+  entity: string,
+  newIdentityKeys: (string | null)[],
+  lookup: LiveRowLookup,
+): Promise<(LiveIdentityMatch | null)[]> {
+  if (!newIdentityKeys.some((k) => k !== null && k.length >= 2)) {
+    return newIdentityKeys.map(() => null);
+  }
+
+  const liveRows = await lookup(entity);
+  const liveCandidates = liveRows
+    .map((row) => ({
+      id: String(row[PK[entity] ?? 'id'] ?? ''),
+      label: identityLabelFor(entity, row),
+      key: identityKeyFor(entity, row),
+    }))
+    .filter((c) => c.id && c.key.length >= 2);
+
+  return newIdentityKeys.map((key) => {
+    if (!key || key.length < 2) return null;
+    let best: LiveIdentityMatch | null = null;
+    for (const c of liveCandidates) {
+      const sim = dice(key, c.key);
+      if (sim >= HIGH_SIM && (!best || sim > best.similarity)) {
+        best = { id: c.id, label: c.label, similarity: sim };
+      }
+    }
+    return best;
   });
 }
 

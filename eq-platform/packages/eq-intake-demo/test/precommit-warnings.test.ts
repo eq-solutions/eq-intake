@@ -288,3 +288,40 @@ describe("describeWarning — duplicate rows", () => {
     expect(msg).toContain("ergo group");
   });
 });
+
+describe("describeWarning — duplicate existing (against live EQ records)", () => {
+  it("names the row, the new value, and the existing record it might already be", () => {
+    const msg = describeWarning({
+      kind: "duplicate_existing",
+      slotLabel: "customers.csv",
+      role: "customer",
+      rowIndex: 3,
+      newValue: "Ergo Group",
+      existingId: "cust-123",
+      existingLabel: "ERGO GROUP PTY LTD",
+      similarity: 0.91,
+    });
+    expect(msg).toContain("customers.csv");
+    expect(msg).toContain("row 4"); // 1-based for a human, not the 0-based index
+    expect(msg).toContain("Ergo Group");
+    expect(msg).toContain("ERGO GROUP PTY LTD");
+  });
+});
+
+describe("warningsFingerprint — duplicate existing", () => {
+  it("changes when a live-duplicate candidate resolves, so an old acknowledgment doesn't carry over", () => {
+    const before: PreCommitWarning[] = [
+      {
+        kind: "duplicate_existing",
+        slotLabel: "customers.csv",
+        role: "customer",
+        rowIndex: 3,
+        newValue: "Ergo Group",
+        existingId: "cust-123",
+        existingLabel: "ERGO GROUP PTY LTD",
+        similarity: 0.91,
+      },
+    ];
+    expect(warningsFingerprint(before)).not.toBe(warningsFingerprint([]));
+  });
+});
