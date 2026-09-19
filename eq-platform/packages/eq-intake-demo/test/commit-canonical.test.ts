@@ -12,10 +12,14 @@
  * - Auth error throws before any intake_event is created
  * - inferMapping resolves SimPRO headers via x-eq-source-aliases
  *
- * NOTE: All shell_control and app_data access goes through SECURITY DEFINER
- * RPCs (eq_create_intake_event, eq_finish_intake_event,
- * eq_read_customers_by_intake) because those schemas are not REST-exposed.
- * Tests verify the RPC call shapes rather than from() call shapes.
+ * NOTE: eq_read_customers_by_intake / eq_read_staff_by_intake (FK read-back)
+ * and eq_intake_commit_batch (the standalone-demo direct-commit path) still
+ * go through RPC. eq_create_intake_event / eq_finish_intake_event do NOT —
+ * they were dropped from every tenant plane 2026-05-24 and calling either
+ * one used to hard-fail every real commit ("Into EQ" never actually worked
+ * against a live tenant). The mock below returns an error for any RPC name
+ * it doesn't explicitly recognise, so a regression back to calling either
+ * one fails the suite instead of silently mocking success.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -43,15 +47,16 @@ interface MockState {
   };
   /** Customers to return from eq_read_customers_by_intake. */
   customerLookupRows?: Array<{ customer_id: string; external_id: string }>;
+  /** Staff to return from eq_read_staff_by_intake. */
+  staffLookupRows?: Array<{ staff_id: string; external_id: string }>;
   authUser?: { id: string } | null;
 }
 
 function makeMockSupabase(state: MockState): SupabaseLikeClient {
   return {
     from: (_table: string) => ({
-      // from() is no longer called for eq_intake_events or customers —
-      // all event lifecycle and FK reads go through RPCs (migrations 016, 019).
-      // Keep the shape so structural typing still compiles.
+      // Unused by any current call path — kept only so structural typing
+      // against the real SupabaseLikeClient interface still compiles.
       insert: async () => ({ data: null, error: null }),
       update: () => ({
         eq: async () => ({ data: null, error: null }),
@@ -64,22 +69,28 @@ function makeMockSupabase(state: MockState): SupabaseLikeClient {
     rpc: async (name: string, params: unknown) => {
       state.rpcCalls.push({ name, params });
 
-      // Lifecycle RPCs — always succeed unless explicitly overridden.
-      if (name === "eq_create_intake_event") return { data: null, error: null };
-      if (name === "eq_finish_intake_event") return { data: null, error: null };
       if (name === "eq_read_customers_by_intake") {
         return { data: state.customerLookupRows ?? [], error: null };
       }
 
-      // eq_intake_commit_batch — delegate to override or default success.
-      if (state.commitBatchResponse) {
-        return state.commitBatchResponse(params as { p_table: string });
+      if (name === "eq_read_staff_by_intake") {
+        return { data: state.staffLookupRows ?? [], error: null };
       }
-      const rows = (params as { p_rows?: unknown[] }).p_rows ?? [];
-      return {
-        data: [{ committed_count: rows.length, committed_ids: rows.map((_, i) => `uuid-${i}`) }],
-        error: null,
-      };
+
+      if (name === "eq_intake_commit_batch") {
+        if (state.commitBatchResponse) {
+          return state.commitBatchResponse(params as { p_table: string });
+        }
+        const rows = (params as { p_rows?: unknown[] }).p_rows ?? [];
+        return {
+          data: [{ committed_count: rows.length, committed_ids: rows.map((_, i) => `uuid-${i}`) }],
+          error: null,
+        };
+      }
+
+      // Anything else — including the retired eq_create_intake_event /
+      // eq_finish_intake_event — is a bug if it's ever called again.
+      return { data: null, error: { message: `mock: no handler for rpc "${name}" — is this call meant to happen?` } };
     },
 
     auth: {
@@ -216,6 +227,7 @@ describe("commitBundleToCanonical — auth", () => {
       authUser: null,
     };
     const supabase = makeMockSupabase(state);
+    const getUserSpy = vi.spyOn(supabase.auth, "getUser");
     const result = await commitBundleToCanonical({
       supabase,
       bundle: { customer: CUSTOMER_SHEET as never },
@@ -223,10 +235,7 @@ describe("commitBundleToCanonical — auth", () => {
       createdBy: "shell-session-user-id",
     });
     expect(result.bundleSuccess).toBe(true);
-    const createEventCall = state.rpcCalls.find((c) => c.name === "eq_create_intake_event");
-    expect((createEventCall?.params as { p_created_by?: string } | undefined)?.p_created_by).toBe(
-      "shell-session-user-id",
-    );
+    expect(getUserSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -246,7 +255,7 @@ describe("commitBundleToCanonical — empty bundle", () => {
 });
 
 describe("commitBundleToCanonical — customer-only happy path", () => {
-  it("creates intake event, calls RPC, finalises event", async () => {
+  it("mints an intake_id locally and commits via RPC, with no event-lifecycle call", async () => {
     const state: MockState = { rpcCalls: [] };
     const supabase = makeMockSupabase(state);
     const result = await commitBundleToCanonical({
@@ -258,25 +267,31 @@ describe("commitBundleToCanonical — customer-only happy path", () => {
 
     expect(result.bundleSuccess).toBe(true);
     expect(result.perEntity).toHaveLength(1);
+    expect(result.perEntity[0]?.intakeId).toMatch(/^[0-9a-f-]{36}$/);
 
-    // Verify the intake event was created via RPC (not direct table insert).
-    const createCall = state.rpcCalls.find((c) => c.name === "eq_create_intake_event");
-    expect(createCall).toBeDefined();
-    const createParams = createCall?.params as Record<string, unknown>;
-    expect(createParams.p_tenant_id).toBe(TENANT);
-    expect(createParams.p_entity).toBe("customer");
-    expect(createParams.p_source_filename).toBe("customer_export.csv");
-    expect(createParams.p_status).toBe("committing");
-
-    // Verify commit batch was called.
     const commitCalls = state.rpcCalls.filter((c) => c.name === "eq_intake_commit_batch");
     expect(commitCalls).toHaveLength(1);
     expect((commitCalls[0]?.params as { p_table: string }).p_table).toBe("customers");
+  });
 
-    // Verify the intake event was finalised via RPC (not direct table update).
-    const finishCall = state.rpcCalls.find((c) => c.name === "eq_finish_intake_event");
-    expect(finishCall).toBeDefined();
-    expect((finishCall?.params as Record<string, unknown>).p_status).toBe("completed");
+  it("regression: never calls the retired eq_create_intake_event / eq_finish_intake_event RPCs", async () => {
+    // These were dropped from every tenant plane 2026-05-24. Calling
+    // eq_create_intake_event used to throw and abort the commit before any
+    // row was written — the exact "Couldn't save" bug reported live. The
+    // mock errors on any unrecognised RPC name (see makeMockSupabase), so
+    // this test fails loudly if either call is ever reintroduced.
+    const state: MockState = { rpcCalls: [] };
+    const supabase = makeMockSupabase(state);
+    const result = await commitBundleToCanonical({
+      supabase,
+      bundle: { customer: CUSTOMER_SHEET as never },
+      tenantId: TENANT,
+    });
+
+    expect(result.bundleSuccess).toBe(true);
+    expect(result.perEntity[0]?.committedCount).toBe(1);
+    expect(state.rpcCalls.some((c) => c.name === "eq_create_intake_event")).toBe(false);
+    expect(state.rpcCalls.some((c) => c.name === "eq_finish_intake_event")).toBe(false);
   });
 });
 
@@ -309,11 +324,6 @@ describe("commitBundleToCanonical — RPC failure stops bundle early", () => {
     expect(commitCalls).toHaveLength(1);
     expect(result.perEntity).toHaveLength(1);
     expect(result.perEntity[0]?.fatalError).toContain("tenant_id mismatch");
-
-    // The intake event for the failed entity is closed as 'failed' via RPC.
-    const finishCall = state.rpcCalls.find((c) => c.name === "eq_finish_intake_event");
-    expect(finishCall).toBeDefined();
-    expect((finishCall?.params as Record<string, unknown>).p_status).toBe("failed");
   });
 });
 
@@ -875,9 +885,6 @@ describe("commitBundleToCanonical — stageCommit (the /intake vs /intake/core p
     // The direct RPC must never fire once stageCommit is supplied — that's
     // the whole point of the fix (no bypass of the staging gate).
     expect(state.rpcCalls.some((c) => c.name === "eq_intake_commit_batch")).toBe(false);
-    // intake-stage.ts finalises the event itself — the client must not
-    // stomp that by also calling eq_finish_intake_event on success.
-    expect(state.rpcCalls.some((c) => c.name === "eq_finish_intake_event")).toBe(false);
   });
 
   it("does not treat staged rows as committed, and still finalises the event on total staging", async () => {

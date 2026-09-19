@@ -3,24 +3,41 @@
  *
  * Takes a SimPRO bundle (parsed customer + site + contact sheets) and:
  *   1. Per entity, in FK order (customer → site → contact):
- *      a. Creates an eq_intake_events row (status: 'committing'), returns intake_id.
+ *      a. Mints a local intake_id (crypto.randomUUID()) — purely a
+ *         correlation id for this run; see the note below on why it no
+ *         longer creates a row anywhere.
  *      b. Maps source columns → canonical fields via x-eq-source-aliases.
  *      c. Validates against the canonical JSON Schema (`@eq/validation`'s
  *         validate()) — produces valid_rows + flagged_rows + rejected_rows.
  *      d. Resolves cross-batch FKs: sites/contacts both have customer_id that
  *         must point at a real customer UUID. We use the customer row's
  *         external_id (SimPRO Customer ID) as the join key.
- *      e. Calls supabase.rpc('eq_intake_commit_batch', { p_intake_id,
- *         p_tenant_id, p_table, p_rows }).
- *      f. Updates the eq_intake_events row to 'completed' or 'failed'.
+ *      e. Commits via the host's stageCommit callback when supplied (the EQ
+ *         Shell host always supplies one — see StageCommitFn), otherwise
+ *         calls supabase.rpc('eq_intake_commit_batch', { p_intake_id,
+ *         p_tenant_id, p_table, p_rows }) directly (the standalone demo's
+ *         path — no backend to stage against).
  *
  *   2. Returns a per-entity result with committed_count, rejected rows,
  *      and the intake_ids so the UI can render the audit trail.
  *
+ * intake_id no longer round-trips through an eq_intake_events row created
+ * from here. `eq_create_intake_event`/`eq_finish_intake_event` (the
+ * SECURITY DEFINER wrappers this used to call) were deliberately dropped
+ * from every tenant plane on 2026-05-24 as dead code — intake event
+ * lifecycle now lives on the control plane, driven by the server-side
+ * orchestrators (intake-commit.ts / intake-stage.ts), which key their own
+ * best-effort bookkeeping off the same intake_id this module still mints
+ * and sends. A prior version of this file called those two RPCs anyway
+ * (added independently of that cutover) — the create call threw and
+ * aborted the entire commit before any row was ever written, which is the
+ * bug this comment is here to stop from happening again.
+ *
  * The Supabase client type is kept structural (SupabaseLikeClient interface
  * below) so this package doesn't take a hard dependency on
  * `@supabase/supabase-js`. The shell's `getSupabase()` returns a client that
- * satisfies the interface.
+ * satisfies the interface — still needed for auth.getUser() and the
+ * still-live eq_read_customers_by_intake / eq_read_staff_by_intake FK reads.
  */
 
 import { validate } from "@eq/validation";
@@ -668,71 +685,15 @@ function formatFlag(f: {
 }
 
 // ---------------------------------------------------------------------------
-// eq_intake_events lifecycle
+// intake_id — a local correlation id only; see the top-of-file note on why
+// nothing here creates or finalises a row for it anymore.
 // ---------------------------------------------------------------------------
 
-interface CreateIntakeEventArgs {
-  supabase: SupabaseLikeClient;
-  tenantId: string;
-  createdBy: string;
-  entity: CanonicalEntity;
-  schemaVersion: string;
-  sourceFilename?: string;
-  sourceKind?: string;
-}
-
-async function createIntakeEvent(args: CreateIntakeEventArgs): Promise<string> {
+function generateIntakeId(): string {
   if (typeof crypto === 'undefined' || typeof crypto.randomUUID !== 'function') {
     throw new Error('crypto.randomUUID is not available in this environment — use a modern browser or Node 19+');
   }
-  const intakeId = crypto.randomUUID();
-  // shell_control is not in the Supabase exposed-schemas list — direct
-  // from("eq_intake_events").insert() fails with "Invalid schema: shell_control".
-  // Use the public-schema SECURITY DEFINER wrapper added in migration 016.
-  const { error } = await args.supabase.rpc("eq_create_intake_event", {
-    p_intake_id: intakeId,
-    p_tenant_id: args.tenantId,
-    p_entity: args.entity,
-    p_source_kind: args.sourceKind ?? "import_spreadsheet",
-    p_source_filename: args.sourceFilename ?? null,
-    p_schema_version: args.schemaVersion,
-    p_status: "committing",
-    p_import_mode: "upsert",
-    p_created_by: args.createdBy,
-  });
-  if (error) {
-    throw new Error(`Failed to create intake event for ${args.entity}: ${error.message}`);
-  }
-  return intakeId;
-}
-
-interface FinishIntakeEventArgs {
-  supabase: SupabaseLikeClient;
-  intakeId: string;
-  status: "completed" | "failed";
-  rowsCommitted: number;
-  rowsFlagged: number;
-  rowsRejected: number;
-  errorMessage?: string;
-}
-
-async function finishIntakeEvent(args: FinishIntakeEventArgs): Promise<void> {
-  // shell_control is not in the Supabase exposed-schemas list — direct
-  // from("eq_intake_events").update() fails. Use the SECURITY DEFINER wrapper
-  // added in migration 019.
-  const { error } = await args.supabase.rpc("eq_finish_intake_event", {
-    p_intake_id: args.intakeId,
-    p_status: args.status,
-    p_rows_committed: args.rowsCommitted,
-    p_rows_flagged: args.rowsFlagged,
-    p_rows_rejected: args.rowsRejected,
-    p_error_message: args.errorMessage ?? null,
-  });
-  if (error) {
-    // Don't throw — the data is already committed; logging this is best-effort.
-    // eslint-disable-next-line no-console
-    console.warn(`Failed to finalise intake event ${args.intakeId}: ${error.message}`);
-  }
+  return crypto.randomUUID();
 }
 
 // ---------------------------------------------------------------------------
@@ -922,18 +883,9 @@ async function commitOneEntity(args: CommitOneEntityArgs): Promise<EntityCommitR
   const table = args.schema["x-eq-table"] ?? ENTITY_TABLE[args.entity];
   const schemaVersion = args.schema["x-eq-version"] ?? "1.0.0";
 
-  // Audit-row first — even if validation rejects every row, we want a
-  // record that "this intake was attempted at this time".
   let intakeId: string;
   try {
-    intakeId = await createIntakeEvent({
-      supabase: args.supabase,
-      tenantId: args.tenantId,
-      createdBy: args.createdBy,
-      entity: args.entity,
-      schemaVersion,
-      sourceFilename: args.sourceFilename,
-    });
+    intakeId = generateIntakeId();
   } catch (e) {
     return {
       entity: args.entity,
@@ -1093,15 +1045,6 @@ async function commitOneEntity(args: CommitOneEntityArgs): Promise<EntityCommitR
       allowNonCurrentSchema: true, // demo intake — don't fight the schema registry yet
     });
   } catch (e) {
-    await finishIntakeEvent({
-      supabase: args.supabase,
-      intakeId,
-      status: "failed",
-      rowsCommitted: 0,
-      rowsFlagged: 0,
-      rowsRejected: args.sheet.rows.length,
-      errorMessage: e instanceof Error ? e.message : String(e),
-    });
     return {
       entity: args.entity,
       table,
@@ -1126,14 +1069,6 @@ async function commitOneEntity(args: CommitOneEntityArgs): Promise<EntityCommitR
   ];
 
   if (toCommit.length === 0) {
-    await finishIntakeEvent({
-      supabase: args.supabase,
-      intakeId,
-      status: "completed",
-      rowsCommitted: 0,
-      rowsFlagged: validationResult.summary.flagged,
-      rowsRejected: validationResult.summary.rejected + fkMissedRejections.length,
-    });
     return {
       entity: args.entity,
       table,
@@ -1262,24 +1197,6 @@ async function commitOneEntity(args: CommitOneEntityArgs): Promise<EntityCommitR
 
   const totalRejected =
     validationResult.summary.rejected + fkMissedRejections.length + totalChunkRejected;
-
-  // On the staging path, intake-stage.ts already finalised the event
-  // (status: pending_review or completed) as part of the call that
-  // succeeded — calling eq_finish_intake_event again here would stomp that
-  // with a stale "completed". Only finalise ourselves when either the
-  // direct-RPC path was used, or every stage call actually failed (so
-  // intake-stage never got a chance to finalise it).
-  if (!useStaging || (firstFatalError && committedCount === 0 && stagedCount === 0)) {
-    await finishIntakeEvent({
-      supabase: args.supabase,
-      intakeId,
-      status: firstFatalError && committedCount === 0 && stagedCount === 0 ? "failed" : "completed",
-      rowsCommitted: committedCount,
-      rowsFlagged: validationResult.summary.flagged,
-      rowsRejected: totalRejected,
-      errorMessage: firstFatalError,
-    });
-  }
 
   return {
     entity: args.entity,
