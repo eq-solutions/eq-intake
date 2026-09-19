@@ -1,4 +1,4 @@
-import { useState, useEffect, type JSX } from "react";
+import { useState, useEffect, type JSX, type ReactNode } from "react";
 import {
   computeHealthScores,
   runLicenceExpiryCheck,
@@ -82,6 +82,11 @@ interface ActionItem {
   pts:         number;
   severity:    "danger" | "warning" | "info";
 }
+
+/** Shared status vocabulary for every row in the unified checks list — one
+ * colour language instead of the four slightly-different badge/fill/dot
+ * palettes the previous layout accumulated across its five section types. */
+type RowStatus = "ok" | "warn" | "err" | "info" | "neutral";
 
 // ---------------------------------------------------------------------------
 // Score computation
@@ -248,12 +253,6 @@ function pct(score: number): string {
   return `${Math.round(score * 100)}%`;
 }
 
-function dimFill(score: number): string {
-  if (score >= 0.8) return "eq-health-dim-fill--ok";
-  if (score >= 0.5) return "eq-health-dim-fill--warn";
-  return "eq-health-dim-fill--err";
-}
-
 function statusLabel(composite: number): string {
   if (composite >= 85) return "Good";
   if (composite >= 60) return "Fair";
@@ -267,7 +266,6 @@ function ringColour(composite: number): string {
   if (composite >= 40) return "var(--eq-warn)";
   return "var(--eq-err)";
 }
-
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -308,6 +306,7 @@ function ScoreRing({ composite }: { composite: number }): JSX.Element {
 function DimensionBar({
   label, score, weight, title,
 }: { label: string; score: number; weight: string; title?: string }): JSX.Element {
+  const fillClass = score >= 0.8 ? "eq-health-dim-fill--ok" : score >= 0.5 ? "eq-health-dim-fill--warn" : "eq-health-dim-fill--err";
   return (
     <div className="eq-health-dim">
       <span className="eq-health-dim-name" title={title}>
@@ -316,7 +315,7 @@ function DimensionBar({
       </span>
       <div className="eq-health-dim-track">
         <div
-          className={`eq-health-dim-fill ${dimFill(score)}`}
+          className={`eq-health-dim-fill ${fillClass}`}
           style={{ width: pct(score) } as React.CSSProperties}
         />
       </div>
@@ -348,119 +347,158 @@ function ActionCard({
   );
 }
 
-function HealthCard({
-  hs, onClick, overrides,
-}: { hs: HealthScore; onClick?: (entity: string) => void; overrides?: FieldImportanceOverride[] }): JSX.Element {
-  const label = entityLabel(hs.entity);
+/**
+ * One row in the unified checks list. Every entity-completeness row and
+ * every data-quality check (licences, broken links, duplicates, record age)
+ * renders through this single component instead of five differently-shaped
+ * card/strip/grid layouts — same status-dot + label + result language
+ * throughout, so reading one row teaches you how to read all of them.
+ */
+function CheckRow({
+  status, label, meta, summary, progress, detail, onClick, action, ariaLabel,
+}: {
+  status:     RowStatus;
+  label:      string;
+  meta?:      string;
+  summary?:   ReactNode;
+  /** 0–1 — renders a thin progress bar under the row when set. */
+  progress?:  number;
+  detail?:    ReactNode;
+  /** Present only for rows that drill into a single entity (records rows). */
+  onClick?:   () => void;
+  /** Trailing control, e.g. an on-demand "Scan" button. */
+  action?:    ReactNode;
+  ariaLabel?: string;
+}): JSX.Element {
+  const barClass = `eq-health-row-bar--${status}`;
 
-  if (!hs.started) {
-    return (
-      <button
-        type="button"
-        className="eq-health-card"
-        onClick={onClick ? () => onClick(hs.entity) : undefined}
-        aria-label={`${label} — no records yet`}
-      >
-        <div className="eq-health-card__header">
-          <span className="eq-health-card__name">{label}</span>
-          <span className="eq-health-card__count">0 records</span>
+  const body = (
+    <>
+      <span className={`eq-health-row-dot eq-health-row-dot--${status}`} aria-hidden="true" />
+      <div className="eq-health-row-main">
+        <div className="eq-health-row-top">
+          <span className="eq-health-row-label">{label}</span>
+          {meta && <span className="eq-health-row-meta">{meta}</span>}
+          {summary && <span className="eq-health-row-summary">{summary}</span>}
         </div>
-        <p className="eq-health-card__gaps">No records yet — not counted in the health score.</p>
+        {progress !== undefined && (
+          <div className="eq-health-row-bar-wrap">
+            <div className={`eq-health-row-bar ${barClass}`} style={{ width: pct(progress) }} />
+          </div>
+        )}
+        {detail && <div className="eq-health-row-detail">{detail}</div>}
+      </div>
+      {action && <div className="eq-health-row-action">{action}</div>}
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button type="button" className="eq-health-row eq-health-row--clickable" onClick={onClick} aria-label={ariaLabel}>
+        {body}
       </button>
     );
   }
+  return <div className="eq-health-row" aria-label={ariaLabel}>{body}</div>;
+}
 
-  const percentage = pct(hs.score);
-  const fillClass  = hs.score >= 0.9 ? "eq-health-bar--ok" : hs.score >= 0.7 ? "eq-health-bar--warn" : "eq-health-bar--err";
-  const lowSample  = hs.total < LOW_SAMPLE_THRESHOLD;
+/**
+ * An on-demand check that starts unscanned (a Scan/Check button, gated by a
+ * busy flag), then resolves to either an all-clear row or a row with a
+ * severity + detail. Shared by Duplicates and Record age — the two checks
+ * that run on demand rather than automatically.
+ */
+function ScanCheckRow({
+  label, notYetRun, busy, onScan, verb, verbing, notYetLabel, empty, emptyLabel, severity, summary, detail,
+}: {
+  label:       string;
+  notYetRun:   boolean;
+  busy:        boolean;
+  onScan:      () => void;
+  verb:        string;
+  verbing:     string;
+  notYetLabel: string;
+  empty:       boolean;
+  emptyLabel:  string;
+  severity:    RowStatus;
+  summary:     ReactNode;
+  detail:      ReactNode;
+}): JSX.Element {
+  if (notYetRun) {
+    return (
+      <CheckRow
+        status="neutral"
+        label={label}
+        summary={notYetLabel}
+        detail="Checks every record — takes a moment on a large dataset"
+        action={
+          <button type="button" className="eq-intake-btn-ghost" onClick={onScan} disabled={busy}>
+            {busy ? verbing : verb}
+          </button>
+        }
+      />
+    );
+  }
+  if (empty) {
+    return <CheckRow status="ok" label={label} summary={emptyLabel} />;
+  }
+  return <CheckRow status={severity} label={label} summary={summary} detail={detail} />;
+}
 
-  return (
+/**
+ * One clickable-if-handler-present badge — the shared shape every detail
+ * builder below needs (orphans/duplicates/decay each surface a per-entity
+ * badge that drills down when a handler is given, and is inert text when
+ * it isn't).
+ */
+function EntityBadge({
+  text, cls, title, entity, onEntityClick,
+}: { text: string; cls: string; title: string; entity: string; onEntityClick?: (entity: string) => void }): JSX.Element {
+  return onEntityClick ? (
     <button
       type="button"
-      className="eq-health-card"
-      onClick={onClick ? () => onClick(hs.entity) : undefined}
-      aria-label={`${label} — ${percentage} complete${lowSample ? `, based on only ${hs.total} record${hs.total === 1 ? "" : "s"}` : ""}`}
+      className={`eq-health-badge ${cls} eq-health-orphan__btn`}
+      onClick={() => onEntityClick(entity)}
+      title={title}
     >
-      <div className="eq-health-card__header">
-        <span className="eq-health-card__name">{label}</span>
-        <span className="eq-health-card__count">
-          {hs.total.toLocaleString()} record{hs.total === 1 ? "" : "s"}
-        </span>
-      </div>
-      <div className="eq-health-bar-wrap">
-        <div className={`eq-health-bar ${fillClass}`} style={{ width: percentage } as React.CSSProperties} />
-      </div>
-      <span className="eq-health-card__pct">{percentage}</span>
-      {lowSample && (
-        <p className="eq-health-card__low-sample">Based on only {hs.total} record{hs.total === 1 ? "" : "s"} — treat this score as unproven.</p>
-      )}
-      {hs.gaps.length > 0 && (
-        <div className="eq-health-card__gaps">
-          <span className="eq-health-card__gaps-label">Missing:</span>
-          {hs.gaps.map((field) => {
-            const tier = getFieldTier(hs.entity, field, overrides);
-            const tierClass = tier === "critical" ? "eq-health-badge--critical" : "eq-health-badge--warning";
-            return (
-              <span key={field} className={`eq-health-badge ${tierClass}`}>
-                {fieldLabel(field)}
-              </span>
-            );
-          })}
-        </div>
-      )}
+      {text}
     </button>
+  ) : (
+    <span className={`eq-health-badge ${cls}`} title={title}>{text}</span>
   );
 }
 
-function LicenceStrip({ summary }: { summary: LicenceExpiryAlertSummary }): JSX.Element {
-  if (summary.records_total === 0) {
-    return (
-      <div className="eq-health-licence-strip">
-        <span className="eq-health-badge eq-health-badge--err">No licence data — 0 records</span>
-      </div>
-    );
-  }
-
-  if (summary.total === 0) {
-    return (
-      <div className="eq-health-licence-strip">
-        <span className="eq-health-badge eq-health-badge--ok">
-          All {summary.records_total.toLocaleString()} licences current
-        </span>
-      </div>
-    );
-  }
+function orphanDetail(
+  summary: OrphanSummary, onEntityClick?: (entity: string) => void,
+): ReactNode {
+  const items: Array<{ count: number; entity: string; label: string }> = [
+    { count: summary.assets_no_site_count,     entity: "assets",   label: `asset${summary.assets_no_site_count !== 1 ? "s" : ""} missing site` },
+    { count: summary.contacts_no_parent_count, entity: "contacts", label: `contact${summary.contacts_no_parent_count !== 1 ? "s" : ""} unlinked` },
+    { count: summary.licences_no_staff_count,  entity: "licences", label: `licence${summary.licences_no_staff_count !== 1 ? "s" : ""} missing staff` },
+    { count: summary.sites_no_customer_count,  entity: "sites",    label: `site${summary.sites_no_customer_count !== 1 ? "s" : ""} missing customer` },
+  ].filter((i) => i.count > 0);
 
   return (
-    <div className="eq-health-licence-strip">
-      {summary.critical > 0 && (
-        <span className="eq-health-badge eq-health-badge--critical">{summary.critical} expired / critical</span>
-      )}
-      {summary.warning > 0 && (
-        <span className="eq-health-badge eq-health-badge--warning">{summary.warning} expiring soon</span>
-      )}
-      {summary.info > 0 && (
-        <span className="eq-health-badge eq-health-badge--info">{summary.info} within 60 days</span>
-      )}
-    </div>
+    <>
+      {items.map((i) => (
+        <EntityBadge
+          key={i.entity}
+          text={`${i.count} ${i.label}`}
+          cls="eq-health-badge--warning"
+          title={`Open ${i.entity} drill-down`}
+          entity={i.entity}
+          onEntityClick={onEntityClick}
+        />
+      ))}
+    </>
   );
 }
 
-function DuplicateStrip({
-  report, onEntityClick,
-}: { report: DuplicateReport[]; onEntityClick?: (entity: string) => void }): JSX.Element {
-  const total = report.reduce((n, r) => n + r.clusters.length, 0);
-
-  if (total === 0) {
-    return (
-      <div className="eq-health-licence-strip">
-        <span className="eq-health-badge eq-health-badge--ok">No duplicates found</span>
-      </div>
-    );
-  }
-
+function duplicateDetail(
+  report: DuplicateReport[], onEntityClick?: (entity: string) => void,
+): ReactNode {
   return (
-    <div className="eq-health-licence-strip">
+    <>
       {report
         .filter((r) => r.clusters.length > 0)
         .map((r) => {
@@ -477,77 +515,26 @@ function DuplicateStrip({
           const tip = danger
             ? `${r.clusters.length} duplicate group${r.clusters.length !== 1 ? "s" : ""} · ${needs} need a survivor chosen — open ${r.entity}`
             : `Open ${r.entity} drill-down`;
-          return onEntityClick ? (
-            <button
+          return (
+            <EntityBadge
               key={r.entity}
-              type="button"
-              className={`eq-health-badge ${cls} eq-health-orphan__btn`}
-              onClick={() => onEntityClick(r.entity)}
+              text={text}
+              cls={cls}
               title={tip}
-            >
-              {text}
-            </button>
-          ) : (
-            <span key={r.entity} className={`eq-health-badge ${cls}`} title={tip}>{text}</span>
+              entity={r.entity}
+              onEntityClick={onEntityClick}
+            />
           );
         })}
-    </div>
+    </>
   );
 }
 
-function OrphanStrip({
-  summary, onEntityClick,
-}: { summary: OrphanSummary; onEntityClick?: (entity: string) => void }): JSX.Element {
-  if (summary.total === 0) {
-    return (
-      <div className="eq-health-licence-strip">
-        <span className="eq-health-badge eq-health-badge--ok">No broken links</span>
-      </div>
-    );
-  }
-
-  function Badge({ count, entity, label }: { count: number; entity: string; label: string }): JSX.Element | null {
-    if (count === 0) return null;
-    const text = `${count} ${label}`;
-    return onEntityClick ? (
-      <button
-        type="button"
-        className="eq-health-badge eq-health-badge--warning eq-health-orphan__btn"
-        onClick={() => onEntityClick(entity)}
-        title={`Open ${entity} drill-down`}
-      >
-        {text}
-      </button>
-    ) : (
-      <span className="eq-health-badge eq-health-badge--warning">{text}</span>
-    );
-  }
-
+function decayDetail(
+  report: DecaySummary[], onEntityClick?: (entity: string) => void,
+): ReactNode {
   return (
-    <div className="eq-health-licence-strip">
-      <Badge count={summary.assets_no_site_count}     entity="assets"   label={`asset${summary.assets_no_site_count !== 1 ? "s" : ""} missing site`} />
-      <Badge count={summary.contacts_no_parent_count} entity="contacts" label={`contact${summary.contacts_no_parent_count !== 1 ? "s" : ""} unlinked`} />
-      <Badge count={summary.licences_no_staff_count}  entity="licences" label={`licence${summary.licences_no_staff_count !== 1 ? "s" : ""} missing staff`} />
-      <Badge count={summary.sites_no_customer_count}  entity="sites"    label={`site${summary.sites_no_customer_count !== 1 ? "s" : ""} missing customer`} />
-    </div>
-  );
-}
-
-function DecayStrip({
-  report, onEntityClick,
-}: { report: DecaySummary[]; onEntityClick?: (entity: string) => void }): JSX.Element {
-  const anyStale = report.some((r) => r.aging + r.stale + r.very_stale > 0);
-
-  if (!anyStale) {
-    return (
-      <div className="eq-health-licence-strip">
-        <span className="eq-health-badge eq-health-badge--ok">All records current</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="eq-health-licence-strip">
+    <>
       {report
         .filter((r) => r.aging + r.stale + r.very_stale > 0)
         .map((r) => {
@@ -561,28 +548,82 @@ function DecayStrip({
           const tip = r.stalest[0]
             ? `Oldest: ${r.stalest[0].label} (${r.stalest[0].days_since}d)`
             : `${r.oldest_days}d since last update`;
+          const text = `${label}: ${worst}, oldest ${r.oldest_days}d`;
 
-          return onEntityClick ? (
-            <button
+          return (
+            <EntityBadge
               key={r.entity}
-              type="button"
-              className={`eq-health-badge eq-health-badge--${severity} eq-health-orphan__btn`}
-              onClick={() => onEntityClick(r.entity)}
+              text={text}
+              cls={`eq-health-badge--${severity}`}
               title={tip}
-            >
-              {label}: {worst}, oldest {r.oldest_days}d
-            </button>
-          ) : (
-            <span
-              key={r.entity}
-              className={`eq-health-badge eq-health-badge--${severity}`}
-              title={tip}
-            >
-              {label}: {worst}, oldest {r.oldest_days}d
-            </span>
+              entity={r.entity}
+              onEntityClick={onEntityClick}
+            />
           );
         })}
-    </div>
+    </>
+  );
+}
+
+function recordRow(
+  hs: HealthScore, overrides: FieldImportanceOverride[] | undefined, onEntityClick: ((entity: string, field?: string) => void) | undefined,
+): ReactNode {
+  const label = entityLabel(hs.entity);
+
+  if (!hs.started) {
+    return (
+      <CheckRow
+        key={hs.entity}
+        status="neutral"
+        label={label}
+        meta="0 records"
+        summary="Not started"
+        detail="Not counted in the health score yet."
+        onClick={onEntityClick ? () => onEntityClick(hs.entity) : undefined}
+        ariaLabel={`${label} — no records yet`}
+      />
+    );
+  }
+
+  const lowSample  = hs.total < LOW_SAMPLE_THRESHOLD;
+  const status: RowStatus = hs.score >= 0.9 ? "ok" : hs.score >= 0.7 ? "warn" : "err";
+  const percentage = pct(hs.score);
+  const detail = (hs.gaps.length > 0 || lowSample) && (
+    <>
+      {lowSample && (
+        <p className="eq-health-card__low-sample">
+          Based on only {hs.total} record{hs.total === 1 ? "" : "s"} — treat this score as unproven.
+        </p>
+      )}
+      {hs.gaps.length > 0 && (
+        <div className="eq-health-card__gaps">
+          <span className="eq-health-card__gaps-label">Missing:</span>
+          {hs.gaps.map((field) => {
+            const tier = getFieldTier(hs.entity, field, overrides);
+            const tierClass = tier === "critical" ? "eq-health-badge--critical" : "eq-health-badge--warning";
+            return (
+              <span key={field} className={`eq-health-badge ${tierClass}`}>
+                {fieldLabel(field)}
+              </span>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <CheckRow
+      key={hs.entity}
+      status={status}
+      label={label}
+      meta={`${hs.total.toLocaleString()} record${hs.total === 1 ? "" : "s"}`}
+      summary={percentage}
+      progress={hs.score}
+      detail={detail || undefined}
+      onClick={onEntityClick ? () => onEntityClick(hs.entity) : undefined}
+      ariaLabel={`${label} — ${percentage} complete${lowSample ? `, based on only ${hs.total} record${hs.total === 1 ? "" : "s"}` : ""}`}
+    />
   );
 }
 
@@ -757,6 +798,92 @@ export function IntakeHealthHome({
     }
   };
 
+  // ---- licences row -------------------------------------------------------
+  let licenceRow: ReactNode = null;
+  if (licences) {
+    if (licences.records_total === 0) {
+      licenceRow = (
+        <CheckRow status="err" label="Licences" summary="No licence data — 0 records" />
+      );
+    } else if (licences.total === 0) {
+      licenceRow = (
+        <CheckRow status="ok" label="Licences" summary={`All ${licences.records_total.toLocaleString()} current`} />
+      );
+    } else {
+      const parts = [
+        licences.critical > 0 ? `${licences.critical} expired/critical` : null,
+        licences.warning  > 0 ? `${licences.warning} expiring soon`     : null,
+        licences.info     > 0 ? `${licences.info} within 60 days`       : null,
+      ].filter(Boolean).join(" · ");
+      licenceRow = (
+        <CheckRow
+          status={licences.critical > 0 ? "err" : licences.warning > 0 ? "warn" : "info"}
+          label="Licences"
+          summary={parts}
+        />
+      );
+    }
+  }
+
+  // ---- broken links (orphans) row -----------------------------------------
+  let orphanRow: ReactNode = null;
+  if (orphans) {
+    orphanRow = orphans.total === 0 ? (
+      <CheckRow status="ok" label="Broken links" summary="None found" />
+    ) : (
+      <CheckRow
+        status="warn"
+        label="Broken links"
+        summary={`${orphans.total} to fix`}
+        detail={orphanDetail(orphans, onEntityClick)}
+      />
+    );
+  }
+
+  // ---- duplicates row -------------------------------------------------------
+  const dupeTotal = dupes?.reduce((n, r) => n + r.clusters.length, 0) ?? 0;
+  const dupeNeedsReconcile = dupes?.some((r) => (r.needs_reconcile ?? 0) > 0) ?? false;
+  const duplicatesRow = (
+    <ScanCheckRow
+      label="Duplicates"
+      notYetRun={dupes === null}
+      busy={dupesBusy}
+      onScan={scanDuplicates}
+      verb="Scan"
+      verbing="Scanning…"
+      notYetLabel="Not scanned yet"
+      empty={dupeTotal === 0}
+      emptyLabel="None found"
+      severity={dupeNeedsReconcile ? "err" : "warn"}
+      summary={`${dupeTotal} possible`}
+      detail={dupes ? duplicateDetail(dupes, onEntityClick) : null}
+    />
+  );
+
+  // ---- record age (decay) row ----------------------------------------------
+  // Same 3-way severity decayDetail already uses per entity (very_stale beats
+  // stale beats aging-only) — so the row's own dot never disagrees with the
+  // badges inside its own detail.
+  const anyStale     = decay?.some((r) => r.aging + r.stale + r.very_stale > 0) ?? false;
+  const anyVeryStale = decay?.some((r) => r.very_stale > 0) ?? false;
+  const anyMerelyStale = decay?.some((r) => r.stale > 0) ?? false;
+  const recordAgeRow = (
+    <ScanCheckRow
+      label="Record age"
+      notYetRun={decay === null}
+      busy={decayBusy}
+      onScan={scanDecay}
+      verb="Check"
+      verbing="Checking…"
+      notYetLabel="Not checked yet"
+      empty={!anyStale}
+      emptyLabel="All current"
+      severity={anyVeryStale ? "err" : anyMerelyStale ? "warn" : "info"}
+      summary="Some records aging"
+      detail={decay ? decayDetail(decay, onEntityClick) : null}
+    />
+  );
+
   return (
     <section className="eq-health-home">
 
@@ -775,13 +902,14 @@ export function IntakeHealthHome({
         </button>
       </div>
 
-      {/* The 5 checks run in parallel (Promise.allSettled) and already tolerate
+      {/* The checks run in parallel (Promise.allSettled) and already tolerate
           each other failing independently — so each section below reveals
           itself as its own data lands instead of waiting behind one big
-          spinner for the slowest of the five. */}
+          spinner for the slowest of them. */}
       {loading && <p className="eq-health-loading-hint">Still checking a few things…</p>}
 
-      {/* Composite score + 6 dimensions */}
+      {/* Composite score + 6 dimensions — the one headline number, with the
+          "why" tucked behind a disclosure instead of six bars up front. */}
       <div className="eq-health-top">
         {scores !== null ? (
           <>
@@ -803,7 +931,8 @@ export function IntakeHealthHome({
         )}
       </div>
 
-      {/* Action queue */}
+      {/* Action queue — the top 4 highest-impact gaps. Left exactly as-is:
+          already the clearest part of the old layout. */}
       {actions.length > 0 && (
         <div className="eq-health-actions">
           <span className="eq-health-section-label">
@@ -815,74 +944,28 @@ export function IntakeHealthHome({
         </div>
       )}
 
-      {/* Entity cards */}
+      {/* Your records — what used to be a 5-card grid is now 5 rows in the
+          same list language the checks below use. */}
       {scores !== null && (
-        <div className="eq-health-grid">
-          {scores.map((hs) => (
-            <HealthCard key={hs.entity} hs={hs} onClick={onEntityClick} overrides={fieldImportanceOverrides} />
-          ))}
+        <div className="eq-health-list-section">
+          <span className="eq-health-section-label">Your records</span>
+          <div className="eq-health-list">
+            {scores.map((hs) => recordRow(hs, fieldImportanceOverrides, onEntityClick))}
+          </div>
         </div>
       )}
 
-      {/* Licence strip */}
-      {licences && (
-        <div className="eq-health-strip-section">
-          <span className="eq-health-section-label">Licences</span>
-          <LicenceStrip summary={licences} />
+      {/* Data quality checks — licences, broken links, duplicates, record age.
+          Previously four separately-headed strips with their own visual
+          rhythm; now four rows in the same list as the records above. */}
+      <div className="eq-health-list-section">
+        <span className="eq-health-section-label">Data quality checks</span>
+        <div className="eq-health-list">
+          {licenceRow}
+          {orphanRow}
+          {duplicatesRow}
+          {recordAgeRow}
         </div>
-      )}
-
-      {/* Orphan strip */}
-      {orphans && (
-        <div className="eq-health-strip-section">
-          <span className="eq-health-section-label">Broken links</span>
-          <OrphanStrip summary={orphans} onEntityClick={onEntityClick} />
-        </div>
-      )}
-
-      {/* Duplicate detection (on-demand) — deliberately not auto-run: it
-          re-reads every record in every entity and compares them pairwise,
-          on top of the fetch the checks above already did. Cheap to click,
-          not free to run on every page load, so it stays a choice. */}
-      <div className="eq-health-strip-section">
-        <span className="eq-health-section-label">Duplicates</span>
-        {dupes === null ? (
-          <>
-            <button
-              type="button"
-              className="eq-intake-btn-ghost"
-              onClick={scanDuplicates}
-              disabled={dupesBusy}
-            >
-              {dupesBusy ? "Scanning…" : "Scan for possible duplicates"}
-            </button>
-            <span className="eq-health-scan-hint">Checks every record — takes a moment on a large dataset</span>
-          </>
-        ) : (
-          <DuplicateStrip report={dupes} onEntityClick={onEntityClick} />
-        )}
-      </div>
-
-      {/* Decay detection (on-demand) — same reason as Duplicates above: a
-          full re-read of every entity, kept opt-in rather than run on every
-          load. */}
-      <div className="eq-health-strip-section">
-        <span className="eq-health-section-label">Record age</span>
-        {decay === null ? (
-          <>
-            <button
-              type="button"
-              className="eq-intake-btn-ghost"
-              onClick={scanDecay}
-              disabled={decayBusy}
-            >
-              {decayBusy ? "Scanning…" : "Check for stale records"}
-            </button>
-            <span className="eq-health-scan-hint">Checks every record — takes a moment on a large dataset</span>
-          </>
-        ) : (
-          <DecayStrip report={decay} onEntityClick={onEntityClick} />
-        )}
       </div>
 
     </section>
