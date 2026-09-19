@@ -52,7 +52,9 @@ import {
   collectPreCommitWarnings,
   describeWarning,
   warningsFingerprint,
+  type PreCommitWarning,
 } from "../shared/precommit-warnings.js";
+import type { RoleName } from "../rollup/roles.js";
 
 export interface IntakeModuleProps {
   /**
@@ -472,13 +474,36 @@ function CommitView({
   const [result, setResult] = useState<CommitResult | null>(null);
   const [sourceFilename, setSourceFilename] = useState("");
 
-  // Pre-commit review gate — shaky classifications and likely multi-value
-  // cells, aggregated across every slot. Mirrors @eq/confirm-ui's
-  // MappingTable checkbox-acknowledgment pattern, since eq-shell's real
-  // intake pipeline never renders MappingTable itself. Re-derived from
-  // bundle.slots every render, so adding/removing/reclassifying a file
-  // always reflects the current set, not a stale snapshot.
-  const warnings = useMemo(() => collectPreCommitWarnings(bundle.slots), [bundle.slots]);
+  // Per-role, per-header manual mapping overrides — how a human answers
+  // "which column is X?" when previewUnmappedRequiredFields flags a required
+  // field nothing mapped to. Keyed by header (matching inferMapping()'s own
+  // shape) so it merges directly into commitBundleToCanonical's manualMapping
+  // option; at most one header may point at a given field within one role,
+  // enforced by setManualPick below, not by this state's type.
+  const [manualMappings, setManualMappings] = useState<Partial<Record<RoleName, Record<string, string | null>>>>({});
+
+  const setManualPick = useCallback((role: RoleName, field: string, header: string | null) => {
+    setManualMappings((prev) => {
+      const roleMap = { ...(prev[role] ?? {}) };
+      for (const h of Object.keys(roleMap)) {
+        if (roleMap[h] === field) delete roleMap[h];
+      }
+      if (header) roleMap[header] = field;
+      return { ...prev, [role]: roleMap };
+    });
+  }, []);
+
+  // Pre-commit review gate — shaky classifications, likely multi-value
+  // cells, and required fields no column filled, aggregated across every
+  // slot. Mirrors @eq/confirm-ui's MappingTable checkbox-acknowledgment
+  // pattern, since eq-shell's real intake pipeline never renders MappingTable
+  // itself. Re-derived from bundle.slots + manualMappings every render, so
+  // adding/removing/reclassifying a file, or picking a column, always
+  // reflects the current set, not a stale snapshot.
+  const warnings = useMemo(
+    () => collectPreCommitWarnings(bundle.slots, manualMappings),
+    [bundle.slots, manualMappings],
+  );
   const warningsKey = useMemo(() => warningsFingerprint(warnings), [warnings]);
   const [acknowledgedKey, setAcknowledgedKey] = useState<string | null>(null);
   const warningsAcknowledged = warnings.length === 0 || acknowledgedKey === warningsKey;
@@ -523,6 +548,7 @@ function CommitView({
         bundle: commitBundle,
         tenantId,
         createdBy,
+        manualMapping: manualMappings,
         sourceFilename: filename,
         onProgress: (msg) => setProgressMsg(msg),
         stageCommit,
@@ -564,7 +590,18 @@ function CommitView({
           <strong>Check these before saving</strong>
           <ul>
             {warnings.map((w, i) => (
-              <li key={i}>{describeWarning(w)}</li>
+              <li key={i}>
+                {describeWarning(w)}
+                {w.kind === "unmapped_required" && (
+                  <UnmappedFieldPicker
+                    warning={w}
+                    currentHeader={
+                      Object.entries(manualMappings[w.role] ?? {}).find(([, f]) => f === w.field)?.[0] ?? ""
+                    }
+                    onPick={(header) => setManualPick(w.role, w.field, header || null)}
+                  />
+                )}
+              </li>
             ))}
           </ul>
           <label className="eq-intake-precommit-warning__ack">
@@ -643,5 +680,38 @@ function CommitView({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * "Which column is X?" dropdown for one unmapped_required warning. Offers
+ * every header in that slot's sheet, plus a blank "not picked yet" option so
+ * nothing is silently pre-selected. Picking a header removes the warning
+ * (see collectPreCommitWarnings's manualMappings param) rather than just
+ * acknowledging it, since a pick is an actual fix, not a known limitation.
+ */
+function UnmappedFieldPicker({
+  warning,
+  currentHeader,
+  onPick,
+}: {
+  warning: Extract<PreCommitWarning, { kind: "unmapped_required" }>;
+  currentHeader: string;
+  onPick: (header: string) => void;
+}): JSX.Element {
+  return (
+    <select
+      className="eq-intake-precommit-warning__pick"
+      aria-label={`Which column is ${warning.field.replace(/_/g, " ")}?`}
+      value={currentHeader}
+      onChange={(e) => onPick(e.target.value)}
+    >
+      <option value="">— pick a column —</option>
+      {warning.availableHeaders.map((h) => (
+        <option key={h} value={h}>
+          {h}
+        </option>
+      ))}
+    </select>
   );
 }

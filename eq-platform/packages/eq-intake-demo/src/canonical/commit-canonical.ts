@@ -146,6 +146,17 @@ export interface CommitOptions {
    * standalone demo's mock client satisfies.
    */
   createdBy?: string;
+  /**
+   * Per-entity, per-header overrides for inferMapping()'s exact-alias-match
+   * result — e.g. { customer: { "Clients": "company_name" } } when a header
+   * like "Clients" (plural) didn't exactly match any x-eq-source-aliases
+   * entry. Keys win over whatever inferMapping() inferred for that header;
+   * a null value clears an inferred mapping instead of setting one. Surfaced
+   * by previewUnmappedRequiredFields() + IntakeModule's precommit warning
+   * panel, so a human can answer "which column is X?" instead of the row
+   * silently failing required-field validation.
+   */
+  manualMapping?: Partial<Record<CanonicalEntity, Record<string, string | null>>>;
   /** Filename to surface in eq_intake_events.source_filename — for the audit. */
   sourceFilename?: string;
   /** Override schemas — useful for testing. Production callers pass nothing. */
@@ -196,6 +207,10 @@ interface JsonSchemaField {
   "x-eq-source-aliases"?: string[];
   "x-eq-foreign-key"?: string;
   "x-eq-system-managed"?: boolean;
+  /** e.g. site_id, customer_id: listed in `required` (the row can't exist
+   *  without one) but generated on commit if no column supplies it — being
+   *  unmapped is normal, not a gap to ask about. */
+  "x-eq-required-on-import"?: boolean;
   [k: string]: unknown;
 }
 
@@ -285,10 +300,11 @@ const MULTI_VALUE_SAMPLE_LIMIT = 3;
 export function previewMultiValueCandidates(
   sheet: ParsedSheet,
   entity: CanonicalEntity,
+  manualMapping?: Record<string, string | null>,
   schemas?: Partial<Record<CanonicalEntity, JsonSchema>>,
 ): MultiValueCandidate[] {
   const schema = schemas?.[entity] ?? CANONICAL_SCHEMAS[entity];
-  const mapping = inferMapping(sheet.headerRow, schema);
+  const mapping = { ...inferMapping(sheet.headerRow, schema), ...(manualMapping ?? {}) };
 
   const multiValueFields = new Map<string, string>(); // canonField -> sourceColumn
   for (const [sourceColumn, canonField] of Object.entries(mapping)) {
@@ -319,6 +335,71 @@ export function previewMultiValueCandidates(
     }
   }
   return candidates;
+}
+
+export interface UnmappedRequiredField {
+  /** Canonical field with no source column mapped to it. */
+  field: string;
+  /**
+   * "required" — a plain schema.required entry with nothing mapped.
+   * "customer_needs_a_name" — customer's actual rule is cross-field
+   * (company_name OR first_name+last_name), not a flat required entry;
+   * `field` is set to "company_name" as the one column this preview offers
+   * a pick for — a sheet whose only name data is split first/last columns
+   * still won't resolve via this path (out of scope for a single-column
+   * pick; see CommitOptions.manualMapping's doc comment).
+   */
+  reason: "required" | "customer_needs_a_name";
+  /** Every header in the sheet, offered as candidates for a manual pick. */
+  availableHeaders: string[];
+}
+
+/**
+ * Pre-commit scan for required fields that inferMapping() (plus any manual
+ * override) still couldn't fill from any column — e.g. a "Clients" header
+ * that scores well enough in classify.ts's fuzzy matcher to win the entity
+ * vote, but doesn't exactly match customer.schema.json's "client_name" alias
+ * at commit time, so company_name ends up null and the row is silently
+ * rejected downstream by the customer_has_a_name rule. Surfacing it here
+ * lets IntakeModule ask "which column is this?" before that happens, instead
+ * of after.
+ *
+ * Skips fields that are x-eq-system-managed (never sourced from a column —
+ * tenant_id), whose x-eq-required-on-import is explicitly false (generated
+ * on commit if absent — site_id, customer_id, contact_id), or that carry a
+ * schema `default` (missing just means "use the default", not "blocked").
+ */
+export function previewUnmappedRequiredFields(
+  sheet: ParsedSheet,
+  entity: CanonicalEntity,
+  manualMapping?: Record<string, string | null>,
+  schemas?: Partial<Record<CanonicalEntity, JsonSchema>>,
+): UnmappedRequiredField[] {
+  const schema = schemas?.[entity] ?? CANONICAL_SCHEMAS[entity];
+  const mapping = { ...inferMapping(sheet.headerRow, schema), ...(manualMapping ?? {}) };
+  const mappedFields = new Set(Object.values(mapping).filter((f): f is string => f != null));
+
+  const missing: UnmappedRequiredField[] = [];
+  for (const field of schema.required ?? []) {
+    const fieldSchema = schema.properties[field];
+    if (fieldSchema?.["x-eq-system-managed"]) continue;
+    if (fieldSchema?.["x-eq-required-on-import"] === false) continue;
+    if (fieldSchema?.["default"] !== undefined) continue;
+    if (!mappedFields.has(field)) {
+      missing.push({ field, reason: "required", availableHeaders: sheet.headerRow });
+    }
+  }
+
+  if (
+    entity === "customer" &&
+    !mappedFields.has("company_name") &&
+    !mappedFields.has("first_name") &&
+    !mappedFields.has("last_name")
+  ) {
+    missing.push({ field: "company_name", reason: "customer_needs_a_name", availableHeaders: sheet.headerRow });
+  }
+
+  return missing;
 }
 
 // ---------------------------------------------------------------------------
@@ -628,6 +709,8 @@ interface CommitOneEntityArgs {
   sourceFilename?: string;
   customerIdMap?: Map<string, string>;
   staffIdMap?: Map<string, string>;
+  /** Forwarded from CommitOptions.manualMapping, already sliced to this entity. */
+  manualMapping?: Record<string, string | null>;
   /** Max rows per RPC call. Defaults to 500 on the direct-RPC path. */
   chunkSize?: number;
   /** Progress callback forwarded from CommitOptions. */
@@ -730,10 +813,11 @@ async function commitOneEntity(args: CommitOneEntityArgs): Promise<EntityCommitR
   const remapIdx = (i: number): number =>
     resolvedToOriginalIndex.length > 0 ? (resolvedToOriginalIndex[i] ?? i) : i;
 
-  // Header → canonical field mapping via x-eq-source-aliases.
-  // Add `customer_id` as an identity mapping if we just stamped it during
-  // resolveCustomerFk (it's not in the source headers but is in the row).
-  const mapping = inferMapping(args.sheet.headerRow, args.schema);
+  // Header → canonical field mapping via x-eq-source-aliases, with any
+  // manual per-header override (see CommitOptions.manualMapping) taking
+  // priority — e.g. a "Clients" header a human confirmed means company_name
+  // after previewUnmappedRequiredFields flagged it as unmapped.
+  const mapping = { ...inferMapping(args.sheet.headerRow, args.schema), ...(args.manualMapping ?? {}) };
   if (
     (args.entity === "site" || args.entity === "contact") &&
     !Object.values(mapping).includes("customer_id") &&
@@ -1033,6 +1117,7 @@ export async function commitBundleToCanonical(opts: CommitOptions): Promise<Comm
       sourceFilename: opts.sourceFilename,
       customerIdMap,
       staffIdMap,
+      manualMapping: opts.manualMapping?.[entity],
       chunkSize: opts.chunkSize,
       onProgress: opts.onProgress,
       stageCommit: opts.stageCommit,
