@@ -134,9 +134,8 @@ function MultiValueWarning({ candidates }: { candidates: MultiValueCandidate[] }
           <div key={c.field} className="eq-detect__row">
             <span className="eq-detect__icon eq-detect__icon--unsure">⚠</span>
             <span>
-              {n} row{n === 1 ? "" : "s"} in '{c.sourceColumn}' look{n === 1 ? "s" : ""} like more than
-              one value (e.g. {examples}). They'll save as one combined value unless you fix the source
-              file first.
+              '{c.sourceColumn}' has {n} row{n === 1 ? "" : "s"} with more than one value (e.g.{" "}
+              {examples}) — saves as one combined value unless fixed first.
             </span>
           </div>
         );
