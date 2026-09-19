@@ -1,11 +1,13 @@
 /**
  * precommit-warnings — pure helpers for the "check these before saving" gate
- * on IntakeModule's CommitView. Three concerns share one mechanism:
+ * on IntakeModule's CommitView. Four concerns share one mechanism:
  *   - a slot's classification wasn't a clean heuristic match (ai / ambiguous_fallback)
  *   - a slot has a schema-hinted field that looks like more than one value
  *     (see canonical/commit-canonical.ts's previewMultiValueCandidates)
  *   - a slot has a required field no column mapped to
  *     (see canonical/commit-canonical.ts's previewUnmappedRequiredFields)
+ *   - two rows in the same slot look like the same record
+ *     (see canonical/commit-canonical.ts's previewDuplicateRows)
  *
  * Kept separate from IntakeModule.tsx / DetectionLine.tsx so the logic is
  * testable without rendering — this package has no component-testing infra,
@@ -17,6 +19,7 @@ import { roleLabel, type FileSlot } from "./intake-bundle.js";
 import {
   previewMultiValueCandidates,
   previewUnmappedRequiredFields,
+  previewDuplicateRows,
 } from "../canonical/commit-canonical.js";
 import type { RoleName } from "../rollup/roles.js";
 
@@ -42,6 +45,14 @@ export type PreCommitWarning =
       field: string;
       reason: "required" | "customer_needs_a_name";
       availableHeaders: string[];
+    }
+  | {
+      kind: "duplicate_rows";
+      slotLabel: string;
+      role: RoleName;
+      rowIndices: [number, number];
+      values: [string, string];
+      similarity: number;
     };
 
 /**
@@ -100,6 +111,17 @@ export function collectPreCommitWarnings(
         availableHeaders: u.availableHeaders,
       });
     }
+
+    for (const d of previewDuplicateRows(slot.sheet, slot.role, manualMapping)) {
+      warnings.push({
+        kind: "duplicate_rows",
+        slotLabel: slot.file.name,
+        role: slot.role,
+        rowIndices: d.rowIndices,
+        values: d.values,
+        similarity: d.similarity,
+      });
+    }
   }
   return warnings;
 }
@@ -119,6 +141,10 @@ export function describeWarning(w: PreCommitWarning): string {
     }
     return `"${w.slotLabel}" — couldn't find a column for "${w.field.replace(/_/g, " ")}". Pick one below, or this row won't save.`;
   }
+  if (w.kind === "duplicate_rows") {
+    const [a, b] = w.values;
+    return `"${w.slotLabel}" — rows ${w.rowIndices[0] + 1} and ${w.rowIndices[1] + 1} look like the same one: "${a}" / "${b}".`;
+  }
   const n = w.affectedRowCount;
   const examples = w.sampleValues.slice(0, 2).join("; ");
   return `"${w.slotLabel}" — ${n} row${n === 1 ? "" : "s"} in '${w.sourceColumn}' look${n === 1 ? "s" : ""} like more than one value (e.g. ${examples}). They'll save as one combined value unless you fix the source file first.`;
@@ -136,6 +162,7 @@ export function warningsFingerprint(warnings: PreCommitWarning[]): string {
     .map((w) => {
       if (w.kind === "low_confidence") return `low_confidence:${w.slotLabel}:${w.role}:${w.method}`;
       if (w.kind === "unmapped_required") return `unmapped_required:${w.slotLabel}:${w.field}:${w.reason}`;
+      if (w.kind === "duplicate_rows") return `duplicate_rows:${w.slotLabel}:${w.rowIndices.join(",")}`;
       return `multi_value:${w.slotLabel}:${w.field}:${w.affectedRowCount}`;
     })
     .join("|");

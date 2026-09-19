@@ -25,6 +25,7 @@
 
 import { validate } from "@eq/validation";
 import type { ParsedSheet } from "@eq/intake";
+import { dice, HIGH_SIM, normaliseCompanyName } from "@eq/intake";
 
 // Real canonical JSON Schemas (the same ones used to generate the DB tables).
 // Imported as JSON modules — Vite + tsc both handle this via resolveJsonModule.
@@ -400,6 +401,84 @@ export function previewUnmappedRequiredFields(
   }
 
   return missing;
+}
+
+/** Canonical field(s) that identify one row of this entity, for within-batch duplicate detection. */
+const IDENTITY_FIELDS: Partial<Record<CanonicalEntity, string[]>> = {
+  customer: ["company_name"],
+  contact: ["first_name", "last_name"],
+  staff: ["first_name", "last_name"],
+  site: ["name"],
+};
+
+export interface DuplicateRowCandidate {
+  /** 0-based indices into sheet.rows of the two rows that look like the same record. */
+  rowIndices: [number, number];
+  /** The identity value from each of the two rows, before normalising. */
+  values: [string, string];
+  /** Dice similarity between the two normalised values (1 = identical). */
+  similarity: number;
+}
+
+/**
+ * Pre-commit scan for two rows in the SAME sheet that look like the same
+ * record — e.g. "SKS" and "SKS Technology" both present as separate customer
+ * rows in one hand-kept spreadsheet. Deliberately scoped to within this one
+ * upload: catching a near-duplicate of an ALREADY-COMMITTED customer needs
+ * reading the tenant's existing customers, and there's no RPC for that today
+ * (only eq_archive_customer/eq_unarchive_customer/eq_delete_customer exist,
+ * per sql/023_customer_contact_mgmt_rpcs.sql) — adding one is app_data-adjacent
+ * schema surface that routes through eq-shell's migration pipe per this
+ * repo's Rule 2, not something this preview can reach into on its own.
+ *
+ * Reuses @eq/intake's own dice()/HIGH_SIM — the same threshold and algorithm
+ * the write-time site/contact resolvers already use live — rather than a
+ * second copy of the fuzzy-match logic.
+ */
+export function previewDuplicateRows(
+  sheet: ParsedSheet,
+  entity: CanonicalEntity,
+  manualMapping?: Record<string, string | null>,
+  schemas?: Partial<Record<CanonicalEntity, JsonSchema>>,
+): DuplicateRowCandidate[] {
+  const identityFields = IDENTITY_FIELDS[entity];
+  if (!identityFields) return [];
+
+  const schema = schemas?.[entity] ?? CANONICAL_SCHEMAS[entity];
+  const mapping = { ...inferMapping(sheet.headerRow, schema), ...(manualMapping ?? {}) };
+  const headerFor = new Map<string, string>();
+  for (const [header, field] of Object.entries(mapping)) {
+    if (field && !headerFor.has(field)) headerFor.set(field, header);
+  }
+
+  const rows = sheet.rows as Record<string, unknown>[];
+  const rawValues: (string | null)[] = rows.map((row) => {
+    const parts = identityFields
+      .map((f) => headerFor.get(f))
+      .filter((h): h is string => h != null)
+      .map((h) => String(row[h] ?? "").trim())
+      .filter((v) => v.length > 0);
+    return parts.length > 0 ? parts.join(" ") : null;
+  });
+
+  const normalise = (v: string): string =>
+    entity === "customer" ? normaliseCompanyName(v) : v.toLowerCase().trim();
+  const normalised = rawValues.map((v) => (v == null ? null : normalise(v)));
+
+  const candidates: DuplicateRowCandidate[] = [];
+  for (let i = 0; i < normalised.length; i++) {
+    const a = normalised[i];
+    if (!a) continue;
+    for (let j = i + 1; j < normalised.length; j++) {
+      const b = normalised[j];
+      if (!b) continue;
+      const similarity = dice(a, b);
+      if (similarity >= HIGH_SIM) {
+        candidates.push({ rowIndices: [i, j], values: [rawValues[i]!, rawValues[j]!], similarity });
+      }
+    }
+  }
+  return candidates;
 }
 
 // ---------------------------------------------------------------------------
