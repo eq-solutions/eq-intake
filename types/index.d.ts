@@ -35,4 +35,5 @@ export type * from "./service_visit.d.ts";
 export type * from "./site.d.ts";
 export type * from "./staff.d.ts";
 export type * from "./swms.d.ts";
+export type * from "./tender_qualification.d.ts";
 export type * from "./toolbox-talk.d.ts";

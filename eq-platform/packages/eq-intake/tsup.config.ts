@@ -1,7 +1,11 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/skills/calibration-cert/index.ts"],
+  entry: [
+    "src/index.ts",
+    "src/skills/calibration-cert/index.ts",
+    "src/skills/remedial-tender-qualify/index.ts",
+  ],
   format: ["esm"],
   dts: true,
   clean: true,

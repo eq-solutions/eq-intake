@@ -34,6 +34,7 @@ import { DownloadResultView, quickExportSpec } from "../shared/DownloadResultVie
 import { ResultPanel } from "../shared/ResultPanel.js";
 import { FreeformIntakeInput, type AiClient } from "../shared/FreeformIntakeInput.js";
 import { ReconcileModule } from "./ReconcileModule.js";
+import { QualifyModule } from "./QualifyModule.js";
 import { IntakeHealthHome } from "./IntakeHealthHome.js";
 import { EntityDrillDown } from "./EntityDrillDown.js";
 import { AskCanonical } from "./AskCanonical.js";
@@ -133,6 +134,21 @@ export interface IntakeModuleProps {
    * and keeps the direct-RPC behaviour.
    */
   stageCommit?: StageCommitFn;
+  /**
+   * Whether the caller may use the go/no-go tender screening tab (plan
+   * §C.1) — same server-gated boolean-prop pattern as canImport. UI-layer
+   * only; the actual write is still gated by eq_intake_commit_qualification's
+   * own tenant check regardless of this flag.
+   */
+  canQualifyTenders?: boolean;
+  /**
+   * Vision provider for the go/no-go tab's document extraction — a full
+   * @eq/ai AIProvider, deliberately a separate prop from `ai` above (that
+   * one is FreeformIntakeInput's own simpler AiClient shape, a different
+   * interface). Omit to run the qualify tab manual-answers-only (see
+   * QualifyModule's own hint when absent).
+   */
+  qualifyAi?: import("@eq/ai").AIProvider | null;
 }
 
 const DEFAULT_TENANT_ID = "00000000-0000-4000-8000-000000000001";
@@ -155,7 +171,7 @@ function defaultRouteLogger(
   }
 }
 
-type IntakeMode = "health" | "queue" | "import" | "ask";
+type IntakeMode = "health" | "queue" | "import" | "ask" | "qualify";
 
 function TabBadge({ count }: { count: number | null }): JSX.Element | null {
   if (!count) return null;
@@ -291,6 +307,17 @@ export function IntakeModule(props: IntakeModuleProps): JSX.Element {
         >
           Ask
         </button>
+        {props.canQualifyTenders && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "qualify"}
+            className={"eq-intake-tab" + (mode === "qualify" ? " eq-intake-tab--active" : "")}
+            onClick={() => { setDrillEntity(null); setMode("qualify"); }}
+          >
+            Go/No-Go
+          </button>
+        )}
 
         {props.canEditCanonical && (
           <button
@@ -368,6 +395,8 @@ export function IntakeModule(props: IntakeModuleProps): JSX.Element {
             setMode("health");
           }}
         />
+      ) : mode === "qualify" ? (
+        <QualifyModule supabase={props.supabase} tenantId={props.tenantId} ai={props.qualifyAi} />
       ) : (
         <>
           <h2>Bring something in</h2>

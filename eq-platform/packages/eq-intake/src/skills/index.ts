@@ -64,3 +64,30 @@ export type {
   ParseCalibrationCertsResult,
   CalCertFileSource,
 } from "./calibration-cert/index.js";
+
+export {
+  assembleQualification,
+  evaluateQualification,
+  extractTenderBundle,
+  mapExtractedToAnswers,
+  buildQualificationCandidate,
+  QUALIFICATION_FACTORS,
+  DEFAULT_QUALIFICATION_CONFIG,
+  emptyQualificationAnswers,
+  TENDER_QUALIFICATION_EXTRACT_SCHEMA,
+} from "./remedial-tender-qualify/index.js";
+export type {
+  QualificationFactor,
+  FactorVerdict,
+  QualificationDecision,
+  FactorAnswer,
+  QualificationAnswers,
+  QualificationConfig,
+  FactorEvaluation,
+  QualificationEvaluation,
+  QualificationHeader,
+  SourceFileRef as TenderQualifySourceFileRef,
+  AssembleQualificationInput,
+  AssembleQualificationResult,
+  TenderQualificationCandidate,
+} from "./remedial-tender-qualify/index.js";
