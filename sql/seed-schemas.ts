@@ -1,7 +1,7 @@
 /**
  * Seed eq_schema_registry from the canonical schema files.
  *
- * Run from the eq-solves-intake repo root:
+ * Run from the eq-intake repo root:
  *   npm run seed:schemas
  *
  * (needs the repo-root package.json's own node_modules — eq-platform is a

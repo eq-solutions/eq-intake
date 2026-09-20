@@ -15,7 +15,7 @@
  * this script makes that fact checkable in one command instead of trusting
  * it as a warning label nobody re-verifies.
  *
- * This does NOT connect to a database itself — eq-solves-intake has no
+ * This does NOT connect to a database itself — eq-intake has no
  * established credential story for reaching every tenant's own dedicated
  * Supabase project (each tenant's service-role key lives encrypted in
  * jvkn's shell_control.tenant_routing, deliberately not casually readable).

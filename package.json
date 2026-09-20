@@ -1,5 +1,5 @@
 {
-  "name": "eq-solves-intake",
+  "name": "eq-intake",
   "version": "1.0.0",
   "private": true,
   "description": "Standalone tooling for sql/ and scripts/ that sits outside the eq-platform pnpm workspace (eq-platform/ is a sibling, not an ancestor, of these directories, so its dependencies never resolve here).",
