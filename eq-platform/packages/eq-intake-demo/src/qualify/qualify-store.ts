@@ -25,7 +25,7 @@ import type {
   QualificationFactor,
   QualificationHeader,
 } from "@eq/intake/remedial-tender-qualify";
-import type { QualifyFlowConfig, QualifyFlowState, QualifyFlowStatus } from "./qualify-types.js";
+import type { QualifyFlowConfig, QualifyFlowState } from "./qualify-types.js";
 
 const EMPTY_HEADER: QualificationHeader = {
   customerNameRaw: null,
@@ -110,8 +110,11 @@ export interface QualifyFlowDriver {
 
 class QualifyFlowDriverImpl implements QualifyFlowDriver {
   private config?: QualifyFlowConfig;
+  private useStore: UseBoundStore<StoreApi<QualifyFlowState>>;
 
-  constructor(private useStore: UseBoundStore<StoreApi<QualifyFlowState>>) {}
+  constructor(useStore: UseBoundStore<StoreApi<QualifyFlowState>>) {
+    this.useStore = useStore;
+  }
 
   configure(config: QualifyFlowConfig): void {
     this.config = config;
