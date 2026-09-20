@@ -15,6 +15,10 @@
     "./calibration-cert": {
       "types": "./dist/skills/calibration-cert/index.d.ts",
       "import": "./dist/skills/calibration-cert/index.js"
+    },
+    "./remedial-tender-qualify": {
+      "types": "./dist/skills/remedial-tender-qualify/index.d.ts",
+      "import": "./dist/skills/remedial-tender-qualify/index.js"
     }
   },
   "files": [

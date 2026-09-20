@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.eq.solutions/intake/tender-qualification/v1.json",
+  "title": "Tender Qualification",
+  "description": "A go/no-go screening decision for a remedial-building tender, captured at the moment it lands — before a customer, job, or contract record exists in EQ. One record per tender, not a batch. The write target is a decision (price / walk / needs_review) with a reasoning trail, not a job record. Sits outside the canonical staff/site/asset spine deliberately: no customer/site/contact FK is required because this is pre-sale.",
+  "type": "object",
+  "x-eq-entity": "tender_qualification",
+  "x-eq-module": "intake",
+  "x-eq-version": "1.0.0",
+  "x-eq-table": "tender_qualifications",
+  "required": ["qualification_id", "tenant_id", "status"],
+  "properties": {
+    "qualification_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Primary key. Minted client-side or by eq_intake_commit_qualification on first save.",
+      "x-eq-required-on-import": false
+    },
+    "tenant_id": {
+      "type": "string",
+      "format": "uuid",
+      "x-eq-system-managed": true
+    },
+    "customer_name_raw": {
+      "type": ["string", "null"],
+      "description": "The prospective client's name as it appears on the tender documents. Free text, no FK — no customer row exists yet at qualification time.",
+      "maxLength": 250
+    },
+    "contact_raw": {
+      "type": ["string", "null"],
+      "description": "The tender's named contact (name / role / phone / email as extracted), free text. No contact FK — pre-sale.",
+      "maxLength": 500
+    },
+    "site_address_raw": {
+      "type": ["string", "null"],
+      "description": "The site or project address as it appears on the tender documents. Free text, no site FK.",
+      "maxLength": 500
+    },
+    "scope_summary": {
+      "type": ["string", "null"],
+      "description": "Vision-extracted plain-language summary of the scope of works from the contract + spec documents.",
+      "maxLength": 8000
+    },
+    "contract_value_estimate": {
+      "type": ["number", "null"],
+      "description": "Estimated total contract value in AUD, extracted or manually entered. Feeds the margin and cash-flow factors.",
+      "minimum": 0
+    },
+    "margin_estimate_pct": {
+      "type": ["number", "null"],
+      "description": "Estimated margin percentage after all costs, BEFORE any optimistic variations are assumed. Compared against the tenant's configured minimum in the go/no-go margin factor.",
+      "minimum": -100,
+      "maximum": 100
+    },
+    "risk_answers": {
+      "type": "object",
+      "description": "The 8-factor go/no-go matrix (business plan §8), one entry per factor. Shape: { \"<factor>\": { \"answer\": \"preferred\"|\"no_go\"|\"needs_review\", \"confidence\": 0.0-1.0, \"source\": \"extracted\"|\"manual\", \"notes\": string|null } }. An unanswerable factor MUST be recorded as needs_review, never silently defaulted to preferred (EQ-AS-CONDUIT rule #11) — mirrors the cycle_costs JSONB pattern already used in contract_scope.",
+      "properties": {
+        "client": { "$ref": "#/$defs/factorAnswer" },
+        "scope": { "$ref": "#/$defs/factorAnswer" },
+        "margin": { "$ref": "#/$defs/factorAnswer" },
+        "cash_flow": { "$ref": "#/$defs/factorAnswer" },
+        "contract": { "$ref": "#/$defs/factorAnswer" },
+        "program": { "$ref": "#/$defs/factorAnswer" },
+        "technical": { "$ref": "#/$defs/factorAnswer" },
+        "location": { "$ref": "#/$defs/factorAnswer" }
+      },
+      "additionalProperties": false,
+      "default": {}
+    },
+    "decision": {
+      "type": ["string", "null"],
+      "enum": ["price", "walk", "needs_review", null],
+      "description": "The go/no-go outcome. null while the qualification is still a draft with no decision run yet."
+    },
+    "decision_reason": {
+      "type": ["string", "null"],
+      "description": "The reasoning trail behind `decision` — ALWAYS populated whenever decision is set, never just the label (EQ-AS-CONDUIT rule #11 / plan §C.1). Typically the joined per-factor reasons from the rules.ts evaluator.",
+      "maxLength": 8000
+    },
+    "decision_made_by": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "The user who ran or confirmed the decision. Null for an unattended/system-only evaluation.",
+      "x-eq-system-managed": true
+    },
+    "decision_made_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "x-eq-system-managed": true
+    },
+    "source_files": {
+      "type": "array",
+      "description": "Self-contained audit trail of the documents this qualification was extracted from — contract, spec, photos.",
+      "items": {
+        "type": "object",
+        "required": ["file_name"],
+        "properties": {
+          "file_name": { "type": "string", "maxLength": 500 },
+          "sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+          "size_bytes": { "type": ["integer", "null"], "minimum": 0 },
+          "kind": {
+            "type": ["string", "null"],
+            "enum": ["contract", "spec", "photo", "other", null]
+          }
+        }
+      },
+      "default": []
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "decided", "archived"],
+      "description": "Import/decision lifecycle. 'draft' = still being answered. 'decided' = a decision has been recorded. 'archived' = withdrawn/superseded — the only form of rollback (a plain status update; there is no delete RPC).",
+      "default": "draft"
+    },
+    "schema_version": {
+      "type": ["string", "null"],
+      "x-eq-system-managed": true
+    },
+    "created_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "x-eq-system-managed": true
+    },
+    "updated_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "x-eq-system-managed": true
+    },
+    "created_by": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "x-eq-system-managed": true
+    },
+    "updated_by": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "x-eq-system-managed": true
+    }
+  },
+  "$defs": {
+    "factorAnswer": {
+      "type": "object",
+      "required": ["answer", "source"],
+      "properties": {
+        "answer": {
+          "type": "string",
+          "enum": ["preferred", "no_go", "needs_review"],
+          "description": "needs_review means the factor could not be confidently answered — it is the explicit non-silent default, never omitted in place of a guess."
+        },
+        "confidence": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "0.0-1.0. Null for a manually-answered factor where confidence isn't meaningful."
+        },
+        "source": {
+          "type": "string",
+          "enum": ["extracted", "manual"]
+        },
+        "notes": {
+          "type": ["string", "null"],
+          "maxLength": 2000
+        }
+      }
+    }
+  },
+  "x-eq-cross-field-rules": [
+    {
+      "id": "decision_requires_reason",
+      "rule": "decision == null OR (decision_reason != null AND decision_reason.trim().length > 0)",
+      "message": "decision_reason must be populated whenever decision is set — a decision without its reasoning trail is a silent drop (EQ-AS-CONDUIT rule #11).",
+      "severity": "error"
+    },
+    {
+      "id": "decided_status_has_decision",
+      "rule": "status != 'decided' OR decision != null",
+      "message": "status is 'decided' but decision is null — a decided qualification must carry an actual decision.",
+      "severity": "error"
+    }
+  ]
+}

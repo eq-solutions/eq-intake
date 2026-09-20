@@ -5041,3 +5041,188 @@ button.eq-primary:hover {
 .eq-qa-queue__save-anyway:hover {
   opacity: 1;
 }
+
+/* ============================================================================
+   Go/No-Go tender qualification tab (plan §C.1)
+   ============================================================================ */
+
+.eq-qualify-module {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.eq-qualify-dropzone {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px;
+  background: var(--eq-page);
+  border: 1px dashed var(--eq-line);
+  border-radius: 4px;
+}
+
+.eq-qualify-hint {
+  font-size: 12.5px;
+  color: var(--eq-muted);
+  margin: 0;
+}
+
+.eq-qualify-warnings {
+  margin: 0;
+  padding: 12px 12px 12px 28px;
+  background: var(--eq-page);
+  border: 1px solid var(--eq-warn);
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--eq-ink);
+}
+
+.eq-qualify-header-fields {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.eq-qualify-header-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  flex: 1;
+  min-width: 200px;
+}
+
+.eq-qualify-header-fields input {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--eq-line);
+}
+
+.eq-qualify-factors {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.eq-qualify-factor {
+  border: 1px solid var(--eq-line);
+  border-radius: 4px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.eq-qualify-factor legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 0 4px;
+}
+
+.eq-qualify-factor label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+}
+
+.eq-qualify-factor input,
+.eq-qualify-factor select,
+.eq-qualify-tribool select {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--eq-line);
+}
+
+.eq-qualify-factor-reason {
+  margin: 0;
+  font-size: 12px;
+  color: var(--eq-muted);
+}
+
+.eq-qualify-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.eq-qualify-badge--preferred {
+  background: #e6f4ea;
+  color: var(--eq-ok);
+}
+
+.eq-qualify-badge--no_go {
+  background: #fbeaea;
+  color: var(--eq-err);
+}
+
+.eq-qualify-badge--needs_review {
+  background: #fdf1e0;
+  color: var(--eq-warn);
+}
+
+.eq-qualify-decision {
+  padding: 14px;
+  border-radius: 4px;
+  border: 1px solid var(--eq-line);
+}
+
+.eq-qualify-decision ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  font-size: 13px;
+}
+
+.eq-qualify-decision--price {
+  border-color: var(--eq-ok);
+  background: #e6f4ea;
+}
+
+.eq-qualify-decision--walk {
+  border-color: var(--eq-err);
+  background: #fbeaea;
+}
+
+.eq-qualify-decision--needs_review {
+  border-color: var(--eq-warn);
+  background: #fdf1e0;
+}
+
+.eq-qualify-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.eq-qualify-actions button {
+  padding: 10px 18px;
+  border: 1px solid var(--eq-line);
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.eq-qualify-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.eq-qualify-saved {
+  font-size: 13px;
+  color: var(--eq-ok);
+}
