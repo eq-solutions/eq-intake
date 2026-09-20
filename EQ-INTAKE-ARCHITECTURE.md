@@ -7,18 +7,14 @@
 ## The shape
 
 ```
-                 ┌──────────────────────────────────────────┐
-                 │  EQ Cards          EQ Import      EQ Capture │
-                 │  (mobile)          (desktop)      (vision)   │
-                 │  inductions        spreadsheets   paper      │
-                 │  prestarts         CSVs           PDFs       │
-                 │  SWMS              XLSXs          photos     │
-                 │  toolbox           multi-tab      emails     │
-                 │  incidents                                   │
-                 │  ITPs                                        │
-                 └──────────┬───────────────┬───────────────┬──┘
-                            │               │               │
-                            ▼               ▼               ▼
+                 ┌───────────────────────────┐   ┌──────────────────────────────┐
+                 │  EQ Cards (mobile)        │   │  EQ Format (desktop)         │
+                 │  inductions, prestarts    │   │  reshape-out: SimPRO quote   │
+                 │  SWMS, JSAs, toolbox      │   │  CSV -> BOM / device-reg /   │
+                 │  incidents, ITPs          │   │  labour-summary              │
+                 └─────────────┬─────────────┘   └──────────────┬───────────────┘
+                               │                                 │
+                               ▼                                 ▼
               ┌──────────────────────────────────────────────┐
               │   Canonical schema spine                     │
               │   • One canonical shape per entity           │
@@ -41,6 +37,8 @@
    │  shape  │            │  shape   │ │  shape  │         │  contractor  │
    └─────────┘            └──────────┘ └─────────┘         └──────────────┘
 ```
+
+Two doors in today. **EQ Capture** (vision — paper, PDFs, photos, forwarded emails) was built end-to-end as a Maximo PDF skill and then deliberately parked cold on cost/latency grounds — a third door for later, not part of the shape above, until a real recurring document pain justifies it. See `EQ-AS-CONDUIT.md` and the EQ Capture section below.
 
 **Doors in. Canonical layer in the middle. Every door out.** AI is what maps each door's shape to the canonical schema and back — no per-vendor integration hand-built for each one. That's the whole shape.
 
@@ -92,19 +90,19 @@ The first wedge here is **inductions**. Every data centre, every hospital, every
 
 After inductions: prestarts, SWMS, JSAs, toolbox talks, incidents, ITPs. All structured. All landing in the same canonical layer.
 
-### EQ Import
+### EQ Format
 
-The desktop surface. Drag any spreadsheet in. AI maps the columns to the canonical schema by reading the column names and a sample of values, then asks for confirmation. Once confirmed, the mapping is saved as a template — next time a similar-shaped file comes in, no AI call needed, the cached mapping applies automatically.
+The desktop surface — today, reshape-out only. Ships as `@eq/format-ui` with three profiles, all sharing one input shape (a SimPRO quote CSV): **BOM** (procurement bill of materials), **device-register** (addressable-device commissioning register), **labour-summary** (per-section labour hours). The profile registry is a hardcoded map — adding a fourth profile is a deliberate file + registry entry, not a config toggle, and that's the brake on N×M scope creep. A separate desktop path, `@eq/intake-demo`, takes a SimPRO bundle and emits five destination shapes (SharePoint rollup, Quotes-by-site, Xero/MYOB imports, Outlook contacts) without an interactive cleanup step — the drag-and-drop bulk-migration fallback.
 
-This is what gets the office out of "manually retype the SimPRO export into the new system" hell. Drag, confirm, done.
+The **cleanup-in** direction — walk someone through fixing a half-baked spreadsheet interactively, on the spot, then commit it to canonical — is aspirational, not built. "EQ Import" was retired as a separate named door; if cleanup-in ever ships, bulk/batch mode is the natural sibling to the interactive mode, not a third thing. See `EQ-FORMAT.md` for the full build-vs-vision breakdown.
 
-### EQ Capture (built, deliberately cold)
+### EQ Capture (built, deliberately cold — not a door today)
 
 The vision surface. Photos of paper SWMS. PDF supplier invoices. Forwarded emails. Handwritten prestart sheets. Vision AI extracts the structured data and routes it to the right canonical entity, preserving the raw text for audit.
 
 **Status as of 2026-05-22:** built end-to-end as the `maximo-pdf-wo` skill (`@eq/intake/skills/maximo-pdf-wo`) plus a wired eq-service integration (parked on branch `claude/wonderful-shannon-9a41a5`), then deliberately shelved. Measured cost was $0.05–0.30 per PDF and latency was 28–80 seconds per PDF on Claude Sonnet 4.5; Netlify's 26-second sync function cap was a hard production blocker on top. For the volume of third-party documents we actually see (Maximo WOs from Equinix maybe a handful of times a month), saving a few minutes of retype at that cost and wait isn't a workflow win.
 
-The OCR engine still runs inside Cards (mobile ML Kit + Claude Vision via Supabase Edge Function). Cards owns the high-leverage intake stories. The standalone Capture surface stays cold until either vision cost/latency drops by an order of magnitude or a real recurring document pain surfaces that Cards can't own.
+The OCR engine still runs inside Cards (mobile ML Kit + Claude Vision via Supabase Edge Function). Cards owns the high-leverage intake stories. The standalone Capture surface stays cold until either vision cost/latency drops by an order of magnitude or a real recurring document pain surfaces that Cards can't own — a third door, added later, when it earns its slot.
 
 ---
 
