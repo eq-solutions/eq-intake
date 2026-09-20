@@ -36,7 +36,7 @@
  *                       caught at the write by ContactDuplicateMergePanel.
  */
 
-import { useState, useEffect, useCallback, useMemo, type JSX } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type JSX } from "react";
 import {
   archiveDuplicateRecord,
   isArchivableDuplicate,
@@ -142,6 +142,7 @@ export function RemediationQueue({ supabase, canMergeSites, canEditCanonical, te
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [doneCount, setDoneCount] = useState(0);
+  const [loading, setLoading] = useState(false);
   const [aiSuggest, setAiSuggest] = useState<Record<string, AiQueueDuplicateVerdict>>({});
   const [aiBusy,    setAiBusy]    = useState<Record<string, boolean>>({});
   const [aiErr,     setAiErr]     = useState<Record<string, boolean>>({});
@@ -173,7 +174,9 @@ export function RemediationQueue({ supabase, canMergeSites, canEditCanonical, te
   const load = useCallback(async () => {
     if (!rpc) return;
     setError(null);
+    setLoading(true);
     const { data, error: err } = await rpc("eq_queue_list");
+    setLoading(false);
     if (err) { setError(err.message); return; }
     const rows = (data as QueueItem[] | null) ?? [];
     setItems(rows);
@@ -193,6 +196,51 @@ export function RemediationQueue({ supabase, canMergeSites, canEditCanonical, te
     // synchronously inside this effect's body — satisfies
     // react-hooks/set-state-in-effect.
     queueMicrotask(() => { void load(); });
+  }, [load]);
+
+  // Live updates — same pattern as ContactDuplicateMergePanel (needs an
+  // eq-shell migration to add app_data.eq_remediation_queue to the Realtime
+  // publication before this actually fires; a no-op until then). Catches a
+  // new item the steward flags, or an existing one someone else resolves,
+  // without waiting for a manual reload. Debounced so a burst of writes
+  // triggers one reload, not one per row.
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!supabase) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    if (typeof sb.channel !== "function") return;
+
+    const debouncedReload = () => {
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+      reloadTimer.current = setTimeout(() => { void load(); }, 400);
+    };
+
+    let channel: { unsubscribe?: () => void } | undefined;
+    try {
+      channel = sb
+        .channel("remediation-queue")
+        .on("postgres_changes", { event: "INSERT", schema: "app_data", table: "eq_remediation_queue" }, debouncedReload)
+        .on("postgres_changes", { event: "UPDATE", schema: "app_data", table: "eq_remediation_queue" }, debouncedReload)
+        .subscribe();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[RemediationQueue] realtime subscribe failed, falling back to mount/focus/manual refresh:", err instanceof Error ? err.message : err);
+      return;
+    }
+
+    return () => {
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+      try { sb.removeChannel?.(channel); } catch { /* best-effort cleanup */ }
+    };
+  }, [supabase, load]);
+
+  // Safety net for a missed/dropped realtime event — refresh when the tab
+  // regains focus.
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible") void load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [load]);
 
   // Customers list, fetched lazily the first time a link item exists
@@ -414,6 +462,18 @@ export function RemediationQueue({ supabase, canMergeSites, canEditCanonical, te
           {doneCount > 0 && (
             <span className="eq-health-badge eq-health-badge--ok">{doneCount} resolved this visit</span>
           )}
+          <span className="eq-queue__watching" title="Updates live as data is written — the Refresh button covers tenants without live updates yet">
+            <span className="eq-queue__watching-dot" aria-hidden="true" />
+            {loading ? "updating…" : "watching"}
+          </span>
+          <button
+            type="button"
+            className="eq-intake-btn-ghost"
+            onClick={() => void load()}
+            disabled={loading}
+          >
+            {loading ? "Refreshing…" : "↻ Refresh"}
+          </button>
         </div>
       </div>
 
