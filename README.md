@@ -1,10 +1,12 @@
 # EQ Intake
 
 The layer between the systems trade subbies are forced to use that don't
-talk to each other. Not a replacement for SimPRO. Not a competitor to
-Xero. The thing in the middle that means apprentices don't do the same
-induction four times a week and bookkeepers don't retype timesheets at
-8pm Friday.
+talk to each other. Not a replacement for the job-management system you
+run. Not a competitor to your accounting platform. AI does the work of
+learning each system's shape, so the connection doesn't need a human to
+hand-build it. The thing in the middle that means apprentices don't do
+the same induction four times a week and bookkeepers don't retype
+timesheets at 8pm Friday.
 
 The why lives in [`EQ-AS-CONDUIT.md`](EQ-AS-CONDUIT.md) — read it first.
 Every other doc in this repo should be readable through that lens.

@@ -9,9 +9,11 @@
 
 ## What EQ is
 
-EQ is the layer between the systems trade subbies already use — SimPRO,
-Xero, AroFlo, MYOB, ServiceM8, principal-contractor portals like
-Equinix and NEXTDC. It removes the human-retyping step between them.
+EQ is the layer between the systems trade subbies already use — whatever
+job-management system, whatever accounting platform, whatever
+principal-contractor portal. AI does the work of learning each one's
+shape, so nobody has to hand-build the connection. It removes the
+human-retyping step between them.
 
 It is **not** a SaaS platform aggregating customer data. It is **not** a
 replacement for any existing tool. Each customer's EQ instance sits
