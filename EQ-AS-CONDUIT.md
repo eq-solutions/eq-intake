@@ -8,7 +8,7 @@ Companion read: **`HOW-WE-WORK-WITH-AI.md`** — the working principles for AI s
 
 ## The problem, in plain words
 
-Trade subbies in Australia move data around for a living and nobody talks about it. The boys on site fill out paper. The office types into SimPRO or AroFlo or Workbench or ServiceM8 or a spreadsheet. The bookkeeper pushes things into Xero or MYOB. The clients — Equinix, NEXTDC, hospital networks, councils, principal contractors — each have their own portal, their own induction system, their own reporting format, their own forms.
+Trade subbies in Australia move data around for a living and nobody talks about it. The boys on site fill out paper. The office types into whatever job-management system they've landed on, or a spreadsheet. The bookkeeper pushes things into whatever accounting platform runs payroll. The clients — data centres, hospital networks, councils, principal contractors — each have their own portal, their own induction system, their own reporting format, their own forms.
 
 Between every layer there is a human retyping things.
 
@@ -16,7 +16,7 @@ The apprentice signs onto site at 6:30am. They get inducted using the principal 
 
 Every step of that is a place where data dies, gets duplicated, gets entered wrong, or just gets forgotten. Every step costs hours per week per person. None of it is the actual job — the actual job is electrical, mechanical, fire, hydraulic. The data movement is overhead nobody asked for.
 
-Software vendors don't fix this because their incentive is to keep your data inside their walls. SimPRO doesn't want to be easy to leave. Xero doesn't want to talk to your client's procurement portal. The principal contractor's induction system doesn't care that you've done the same induction 30 times this year.
+Software vendors don't fix this because their incentive is to keep your data inside their walls. No job-management system wants to be easy to leave. No accounting platform wants to talk to your client's procurement portal. The principal contractor's induction system doesn't care that you've done the same induction 30 times this year.
 
 So tradies absorb the cost. And the cost compounds — every new client portal, every new compliance requirement, every new layer of admin lands on the same tired bookkeeper who's already drowning.
 
@@ -26,7 +26,7 @@ So tradies absorb the cost. And the cost compounds — every new client portal, 
 
 **EQ is the layer between the systems that don't talk to each other.**
 
-It is not a replacement for SimPRO. It is not a competitor to Xero. It is not a new operating system for trade businesses. It sits between the tools tradies are already using and removes the human-retyping step.
+It isn't built around any one system tradies happen to use. It's built around the fact that none of them talk to each other — and AI is what makes closing that gap cheap enough to do for every trade business, not just the ones big enough to pay for a bespoke integration. It is not a replacement for your job-management system. It is not a competitor to your accounting platform. It is not a new operating system for trade businesses. It sits between the tools tradies are already using and removes the human-retyping step.
 
 Two doors in. A third door later when it earns its slot.
 
@@ -39,10 +39,12 @@ Two doors in. A third door later when it earns its slot.
 One canonical layer in the middle that knows what every entity actually is — staff, sites, assets, SWMS, incidents, expenses, quotes, variations.
 
 Every door out:
-- **Into your job-management system** — SimPRO, AroFlo, Workbench, ServiceM8. Their format, their fields, their API.
-- **Into your accounting** — Xero, MYOB, QuickBooks. Whatever the bookkeeper uses.
-- **Into your clients' portals** — Equinix's format, NEXTDC's format, the hospital network's format, the council's format. Each one bespoke. Each one a few clicks away once it's been set up.
+- **Into whatever job-management system you run** — its format, its fields, its API. EQ's AI does the mapping so nobody has to hand-build an integration per client.
+- **Into whatever your bookkeeper uses for accounting** — timesheets, expenses, invoices, shaped the way that platform expects them.
+- **Into whatever portal each client requires** — every principal contractor's compliance system is bespoke. EQ reads the shape it wants and reshapes data to fit, not the other way around.
 - **Into compliance bundles** — audit packs, insurance renewal evidence, principal contractor documentation.
+
+None of these doors are hardcoded integrations with a fixed vendor list. The point isn't "EQ talks to SimPRO." It's that EQ talks to whatever you're already using, because AI can learn a target shape instead of needing a human to hand-code it.
 
 That's it. That's the whole product. The thing in the middle that means the apprentice's prestart photo at 6:30am ends up in the right places automatically by the time the office opens.
 
@@ -68,11 +70,11 @@ If it generates revenue eventually, good. That's how it sustains itself. But the
 
 **SKS (NSW) is where this lives.** Not a proving ground — the primary home. The 50+ field staff, the data centre and healthcare projects, the Equinix audits, the SimPRO exports, the bookkeeper at 8pm Friday — that's the operation EQ is being built for. When it works right here, it works for the next similar operation. The standing rules about generic placeholders and never touching SKS live data unless explicitly told to are about treating production operations with respect.
 
-**We don't compete with anyone.** SimPRO is good at being SimPRO. Xero is good at being Xero. The principal contractor's portal is what it is. EQ doesn't try to do their jobs — it just connects them so the tradies in the middle don't have to be the connection themselves.
+**We don't compete with anyone.** Every system a trade business already runs is good at being that system. The principal contractor's portal is what it is. EQ doesn't try to do their jobs — it just connects them so the tradies in the middle don't have to be the connection themselves.
 
 **Free where it matters.** EQ Cards for inductions should be free. Site inductions are a daily indignity that costs the boys hours a week. There's no excuse to gate that behind a paywall. It's free because charging for it would be tone-deaf to the actual problem — not as a marketing play.
 
-**Integration depth is the only thing that matters.** A single import is interesting. A subbie whose paper SWMS becomes a structured record that lands in their SimPRO, gets exported in the principal contractor's format, gets attached to their insurance renewal pack, and gets matched to the right invoice line in Xero — that's the product. That depth takes time. We build it integration by integration, real customer by real customer, real pain by real pain.
+**Integration depth is the only thing that matters.** A single import is interesting. A subbie whose paper SWMS becomes a structured record that lands in their job-management system, gets exported in the principal contractor's format, gets attached to their insurance renewal pack, and gets matched to the right invoice line in their accounting platform — that's the product. That depth takes time. We build it integration by integration, real customer by real customer, real pain by real pain.
 
 **Tradies first, software second.** The schemas, the validation engine, the AI mapping, the migrations — all of that is plumbing. The product is what an apprentice experiences at 6:30am on a Tuesday and what the bookkeeper experiences at 7pm on a Friday. Plumbing that doesn't change those two moments doesn't matter.
 
@@ -82,7 +84,7 @@ If it generates revenue eventually, good. That's how it sustains itself. But the
 
 ## What we're explicitly not doing
 
-- Not building another job-management system. The world doesn't need a new SimPRO.
+- Not building another job-management system. The world doesn't need another one — it needs the ones already out there to talk to each other.
 - Not asking anyone to switch off anything they currently use.
 - Not gating compliance and safety features (inductions, SWMS, prestarts) behind paywalls. People die when this stuff goes wrong; we are not going to be the reason a corner gets cut.
 - Not pretending this is a unique innovation. The need is obvious to anyone who's done this work. We're just the ones building it.

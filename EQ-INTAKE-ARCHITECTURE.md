@@ -32,17 +32,17 @@
         ▼                        ▼         ▼                      ▼
    ┌─────────┐            ┌──────────┐ ┌─────────┐         ┌──────────────┐
    │ Job-mgt │            │Accounting│ │ Client  │         │  Compliance  │
-   │ systems │            │ systems  │ │ portals │         │  bundles     │
-   │         │            │          │ │         │         │              │
-   │ SimPRO  │            │  Xero    │ │Equinix  │         │ Audit packs  │
-   │ AroFlo  │            │  MYOB    │ │NEXTDC   │         │ Insurance    │
-   │Workbench│            │  QB      │ │Hospital │         │  evidence    │
-   │ServiceM8│            │          │ │ networks│         │ Principal    │
-   │         │            │          │ │Councils │         │  contractor  │
+   │ system  │            │ platform │ │ portals │         │  bundles     │
+   │(whatever│            │(whatever │ │(whatever│         │              │
+   │ you run)│            │ you run) │ │ each one│         │ Audit packs  │
+   │         │            │          │ │ demands)│         │ Insurance    │
+   │  AI maps│            │  AI maps │ │  AI maps│         │  evidence    │
+   │  the    │            │  the     │ │  the    │         │ Principal    │
+   │  shape  │            │  shape   │ │  shape  │         │  contractor  │
    └─────────┘            └──────────┘ └─────────┘         └──────────────┘
 ```
 
-**Three doors in. Canonical layer in the middle. Every door out.** That's the whole shape.
+**Doors in. Canonical layer in the middle. Every door out.** AI is what maps each door's shape to the canonical schema and back — no per-vendor integration hand-built for each one. That's the whole shape.
 
 ---
 
@@ -114,11 +114,11 @@ The mirror image. Each output target gets an export profile that knows how to tr
 
 ### Job-management systems
 
-SimPRO, AroFlo, Workbench, ServiceM8. Each has its own API, its own field names, its own quirks. EQ doesn't replace these — it feeds them. A SWMS captured on EQ Cards lands in SimPRO with the right asset attached, the right job number, the right format SimPRO expects.
+Whatever job-management system a subbie runs. Each has its own API, its own field names, its own quirks. EQ doesn't replace these — it feeds them. AI maps canonical data onto the target's shape instead of a human hand-coding a bespoke integration per vendor. A SWMS captured on EQ Cards lands in that system with the right asset attached, the right job number, the right format it expects.
 
 ### Accounting systems
 
-Xero, MYOB, QuickBooks. The bookkeeper's view. Timesheets, expenses, supplier invoices flow from canonical into whatever format the accountant uses. Cost rates are sensitive — masked by default for non-admin roles.
+Whatever accounting platform the bookkeeper uses. Timesheets, expenses, supplier invoices flow from canonical into whatever format the accountant uses. Cost rates are sensitive — masked by default for non-admin roles.
 
 ### Client portals
 
@@ -176,7 +176,7 @@ The plumbing serves a small set of moments:
 
 **6:30am Tuesday.** Apprentice arrives on a data centre site they've never been to. EQ Cards has their existing induction record. They tap "share with this site," it exports in the principal contractor's format, the gate gets approval in 30 seconds. They're on the tools.
 
-**7pm Friday.** Bookkeeper opens the laptop. The week's timesheets are already structured (came in via EQ Cards from the boys' phones). They drag last week's supplier invoices folder onto EQ Capture. Five minutes later everything's in Xero with the right job costing attached.
+**7pm Friday.** Bookkeeper opens the laptop. The week's timesheets are already structured (came in via EQ Cards from the boys' phones). They drag last week's supplier invoices folder onto EQ Capture. Five minutes later everything's in their accounting platform with the right job costing attached.
 
 **Renewal time.** Insurance broker asks for evidence of safety procedures. EQ generates the bundle in 30 seconds — every SWMS, every toolbox talk, every incident from the last 12 months, structured, dated, signed.
 
@@ -188,8 +188,8 @@ Each of those moments is currently a long, painful, error-prone manual process. 
 
 ## What we explicitly haven't built
 
-- A new job-management system. SimPRO and AroFlo do that.
-- A new accounting platform. Xero and MYOB do that.
+- A new job-management system. Plenty of good ones already exist.
+- A new accounting platform. Same.
 - A new field-services scheduling tool. Plenty of those exist.
 - A new compliance management system. Same.
 - A new "platform" that demands switching off anything.
