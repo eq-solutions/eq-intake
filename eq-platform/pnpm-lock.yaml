@@ -189,6 +189,9 @@ importers:
       '@fontsource/plus-jakarta-sans':
         specifier: ^5.2.8
         version: 5.2.8
+      zustand:
+        specifier: 5.0.2
+        version: 5.0.2(@types/react@19.2.14)(react@19.2.8)
     devDependencies:
       '@types/node':
         specifier: 20.14.0
