@@ -12,7 +12,7 @@ Code skills by calumjs) instead of running `/armada:commission` interactively. E
   `.claude/armada/`). This is correct: a vendored plugin doesn't belong in a production app repo.
   They're read from the local filesystem by any Claude Code session rooted at the repo root.
 - `.claude/armada/scripts/` — the bundled scripts crows-nest's pipeline calls, also local-only.
-- GitHub labels (`armada`, `armada:*`, `fleet-defect`) — created on `eq-solutions/eq-solves-intake`.
+- GitHub labels (`armada`, `armada:*`, `fleet-defect`) — created on `eq-solutions/eq-intake`.
 
 > The skills/scripts live on the Beelink checkout only. If you work this repo from another machine,
 > re-run the pre-bake there or install the plugin (below).
