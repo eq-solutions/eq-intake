@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type JSX } from "react";
+import { useState, useEffect, useCallback, useRef, type JSX } from "react";
 import {
   readSiteAdvisory,
   adjudicateSiteAdvisory,
@@ -242,7 +242,15 @@ function SiteAdvisoryPanel({
                         // Unsure opens an inline note instead of firing
                         // immediately — same/different need no follow-up.
                         if (v === "unsure") { setNotingId(it.id); setNoteDraft(it.verdict_note ?? ""); }
-                        else { onAdjudicate(it.id, v); setEditingId(null); }
+                        else {
+                          onAdjudicate(it.id, v);
+                          // "Same" still needs a merge — fetch the preview
+                          // now instead of waiting for a second click, so
+                          // recording the verdict visibly moves the row
+                          // forward instead of looking like a no-op.
+                          if (v === "same") onPreviewMerge(it);
+                          setEditingId(null);
+                        }
                       }}
                       title={
                         current ? "This is your current answer"
@@ -412,31 +420,79 @@ export function DuplicateMergePanel({ supabase, canMergeSites, onDataChanged }: 
   const [mergeErrors,       setMergeErrors]       = useState<Record<string, string>>({});
   const [merged,            setMerged]            = useState<Record<string, { survivor_site_id: string; movedTotal: number; alreadyMerged?: boolean }>>({});
   const [loading,    setLoading]    = useState(false);
-  // Independent of RemediationQueue's own eq_queue_list load and of
-  // Overview's other health checks — this section refreshes on its own.
-  const [refreshTick, setRefreshTick] = useState(0);
 
-  useEffect(() => {
+  const reload = useCallback(async () => {
     if (!supabase) return;
-    let cancelled = false;
-    setLoading(true);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
+    setLoading(true);
+    try {
+      const result = await readSiteAdvisory(sb);
+      setAdvisory(result);
+    } catch (err) {
+      // Non-fatal — a tenant not yet on migration 0180 has no summary RPC.
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[DuplicateMergePanel] Site advisory read failed:",
+        err instanceof Error ? err.message : err,
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase]);
 
-    readSiteAdvisory(sb)
-      .then((result) => { if (!cancelled) setAdvisory(result); })
-      .catch((err) => {
-        // Non-fatal — a tenant not yet on migration 0180 has no summary RPC.
-        // eslint-disable-next-line no-console
-        console.warn(
-          "[DuplicateMergePanel] Site advisory read failed:",
-          err instanceof Error ? err.message : err,
-        );
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
-    return () => { cancelled = true; };
-  }, [supabase, refreshTick]);
+  // Live updates — same pattern as ContactDuplicateMergePanel (an eq-shell
+  // migration adds site_resolution_advisory/site_resolution_merge_log to the
+  // Realtime publication, mirroring what 0323 did for the contact tables). A
+  // new flag, or a merge landing from any tab/session (auto or human),
+  // reloads the panel on its own. Debounced so a burst of writes triggers
+  // one reload, not one per row. If a tenant's Realtime isn't wired up yet
+  // this is a no-op — mount + focus refresh + the manual button below still
+  // cover it.
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!supabase) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    // Defensive: a mock/partial client (the standalone demo playground) or
+    // an older supabase-js build may not expose .channel at all.
+    if (typeof sb.channel !== "function") return;
+
+    const debouncedReload = () => {
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+      reloadTimer.current = setTimeout(() => { void reload(); }, 400);
+    };
+
+    let channel: { unsubscribe?: () => void } | undefined;
+    try {
+      channel = sb
+        .channel("site-duplicate-merge-panel")
+        .on("postgres_changes", { event: "INSERT", schema: "app_data", table: "site_resolution_advisory" }, debouncedReload)
+        .on("postgres_changes", { event: "INSERT", schema: "app_data", table: "site_resolution_merge_log" }, debouncedReload)
+        .subscribe();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[DuplicateMergePanel] realtime subscribe failed, falling back to mount/focus/manual refresh:", err instanceof Error ? err.message : err);
+      return;
+    }
+
+    return () => {
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+      try { sb.removeChannel?.(channel); } catch { /* best-effort cleanup */ }
+    };
+  }, [supabase, reload]);
+
+  // Safety net for a missed/dropped realtime event — refresh when the tab
+  // regains focus, same pattern most live dashboards use.
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible") void reload(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [reload]);
 
   // Record a human verdict on a flagged row, then reflect it optimistically:
   // the item shows the verdict and the pending/decided counts shift. If the
@@ -618,6 +674,10 @@ export function DuplicateMergePanel({ supabase, canMergeSites, onDataChanged }: 
       <div className="eq-queue__section-header">
         <h3>Possible duplicate sites</h3>
         <span className="eq-queue__section-count">{advisory.total}</span>
+        <span className="eq-queue__watching" title="Updates live as data is written — the Refresh button below covers tenants without live updates yet">
+          <span className="eq-queue__watching-dot" aria-hidden="true" />
+          {loading ? "updating…" : "watching"}
+        </span>
       </div>
       <p className="eq-queue__section-hint">
         Caught automatically as data was written. Say same or different, then merge if you have access —
@@ -646,7 +706,7 @@ export function DuplicateMergePanel({ supabase, canMergeSites, onDataChanged }: 
         type="button"
         className="eq-intake-btn-ghost"
         style={{ marginTop: 8 }}
-        onClick={() => setRefreshTick((t) => t + 1)}
+        onClick={() => void reload()}
         disabled={loading}
       >
         {loading ? "Refreshing…" : "↻ Refresh"}

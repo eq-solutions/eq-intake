@@ -260,7 +260,15 @@ function ContactAdvisoryPanel({
                       disabled={!!saving[it.id]}
                       onClick={() => {
                         if (v === "unsure") { setNotingId(it.id); setNoteDraft(it.verdict_note ?? ""); }
-                        else { onAdjudicate(it.id, v); setEditingId(null); }
+                        else {
+                          onAdjudicate(it.id, v);
+                          // "Same" still needs a merge — fetch the preview
+                          // now instead of waiting for a second click, so
+                          // recording the verdict visibly moves the row
+                          // forward instead of looking like a no-op.
+                          if (v === "same") onPreviewMerge(it);
+                          setEditingId(null);
+                        }
                       }}
                       title={
                         current ? "This is your current answer"

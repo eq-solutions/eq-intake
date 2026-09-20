@@ -845,13 +845,13 @@ export function IntakeHealthHome({
   const dupeNeedsReconcile = dupes?.some((r) => (r.needs_reconcile ?? 0) > 0) ?? false;
   const duplicatesRow = (
     <ScanCheckRow
-      label="Duplicates"
+      label="Duplicates (full scan)"
       notYetRun={dupes === null}
       busy={dupesBusy}
       onScan={scanDuplicates}
       verb="Scan"
       verbing="Scanning…"
-      notYetLabel="Not scanned yet"
+      notYetLabel="Not scanned yet — separate from the live duplicate queue in To Do"
       empty={dupeTotal === 0}
       emptyLabel="None found"
       severity={dupeNeedsReconcile ? "err" : "warn"}

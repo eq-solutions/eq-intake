@@ -21,7 +21,7 @@
  */
 
 import { useMemo, useState, useEffect, useCallback, type JSX } from "react";
-import { type ParsedSheet, readSiteAdvisory, type AskFilter } from "@eq/intake";
+import { type ParsedSheet, readSiteAdvisory, readContactAdvisory, type AskFilter } from "@eq/intake";
 import { useIntakeBundle, type IntakeBundle, type FileSlot } from "../shared/intake-bundle.js";
 import { IntakeDropZone } from "../shared/IntakeDropZone.js";
 import {
@@ -228,16 +228,18 @@ export function IntakeModule(props: IntakeModuleProps): JSX.Element {
     }
   }
 
-  // Lightweight To Do badge — how much is waiting across the two things that
-  // now live in that one tab: site-advisory merges (duplicates caught at the
-  // write, pending a human) and steward remediation queue items. Fetched
-  // once independent of the tab's own richer load, so the tab bar itself
-  // signals where attention is needed before you click in.
+  // Lightweight To Do badge — how much is waiting across the three things
+  // that now live in that one tab: site-advisory merges, contact-advisory
+  // merges (both duplicates caught at the write, pending a human), and
+  // steward remediation queue items. Fetched once independent of the tab's
+  // own richer load, so the tab bar itself signals where attention is
+  // needed before you click in.
   const [advisoryPending, setAdvisoryPending] = useState<number | null>(null);
+  const [contactAdvisoryPending, setContactAdvisoryPending] = useState<number | null>(null);
   const [queuePending, setQueuePending] = useState<number | null>(null);
-  const todoPending = advisoryPending === null && queuePending === null
+  const todoPending = advisoryPending === null && contactAdvisoryPending === null && queuePending === null
     ? null
-    : (advisoryPending ?? 0) + (queuePending ?? 0);
+    : (advisoryPending ?? 0) + (contactAdvisoryPending ?? 0) + (queuePending ?? 0);
 
   useEffect(() => {
     if (!props.supabase) return;
@@ -247,6 +249,10 @@ export function IntakeModule(props: IntakeModuleProps): JSX.Element {
 
     readSiteAdvisory(sb)
       .then((s) => { if (!cancelled) setAdvisoryPending(s.pending); })
+      .catch(() => { /* non-critical — badge just stays hidden */ });
+
+    readContactAdvisory(sb)
+      .then((s) => { if (!cancelled) setContactAdvisoryPending(s.pending); })
       .catch(() => { /* non-critical — badge just stays hidden */ });
 
     sb.rpc("eq_queue_list")
