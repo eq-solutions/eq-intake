@@ -245,7 +245,7 @@ describe("template engine — built-in templates", () => {
     const result = renderTemplate(template, bundle());
     expect(result.headers).toContain("Sites");
     expect(result.headers).toContain("Contacts");
-    expect(result.rows).toHaveLength(3);
+    expect(result.rows).toHaveLength(4);
 
     const acme = result.rows[0]!;
     expect(acme["Company Name"]).toBe("Acme Pty Ltd");
@@ -261,6 +261,11 @@ describe("template engine — built-in templates", () => {
     const gamma = result.rows[2]!;
     expect(gamma["Site Count"]).toBe("0");
     expect(gamma["Contact Count"]).toBe("0");
+
+    // Orphan contact (customer ID 999) surfaces as a pseudo-customer — every row out
+    const orphan = result.rows[3]!;
+    expect(orphan["Company Name"]).toContain("orphan");
+    expect(orphan["Contacts"]).toContain("Dave");
   });
 
   it("Xero ContactsImport produces Xero's documented column shape", () => {
@@ -272,7 +277,7 @@ describe("template engine — built-in templates", () => {
     expect(result.headers).toContain("POAddressLine1");
     expect(result.headers).toContain("PhoneNumber");
     expect(result.headers).toContain("TaxNumber");
-    expect(result.rows).toHaveLength(3);
+    expect(result.rows).toHaveLength(4);
 
     const acme = result.rows[0]!;
     expect(acme["*ContactName"]).toBe("Acme Pty Ltd");
@@ -322,14 +327,15 @@ describe("template engine — built-in templates", () => {
 });
 
 describe("template engine — interaction options", () => {
-  it("skipEmpty drops customers with no sites and no contacts", () => {
+  it("skipEmpty drops customers with no sites and no contacts (orphans still surface)", () => {
     const template = BUILTIN_TEMPLATES.find((t) => t.id === "simpro-customer-rollup")!;
     const result = renderTemplate(template, bundle(), { skipEmpty: true });
-    // Gamma has neither; should be dropped
-    expect(result.rows).toHaveLength(2);
+    // Gamma has neither → dropped; orphan contact 999 still surfaces
+    expect(result.rows).toHaveLength(3);
     expect(result.rows.map((r) => r["Company Name"])).toEqual([
       "Acme Pty Ltd",
       "BETA INDUSTRIES",
+      "(orphan — customer not in export)",
     ]);
     expect(result.stats.customersSkippedEmpty).toBe(1);
   });
@@ -344,10 +350,17 @@ describe("template engine — interaction options", () => {
     expect(result.rows[0]!["Company Name"]).toBe("Acme Pty Ltd");
   });
 
-  it("orphan strategy 'drop' is the default", () => {
+  it("orphan strategy include is the default (every row out)", () => {
     const template = BUILTIN_TEMPLATES.find((t) => t.id === "simpro-customer-rollup")!;
     const result = renderTemplate(template, bundle());
-    // Dave Lim (Customer ID 999) is not added as a pseudo-customer
+    // Dave Lim (Customer ID 999) surfaces as a pseudo-customer
+    expect(result.rows.find((r) => r["Contacts"]?.includes("Dave"))).toBeDefined();
+    expect(result.stats.orphanContacts).toBe(1);
+  });
+
+  it("orphan strategy 'drop' opts into losing orphan rows", () => {
+    const template = BUILTIN_TEMPLATES.find((t) => t.id === "simpro-customer-rollup")!;
+    const result = renderTemplate(template, bundle(), { orphanStrategy: "drop" });
     expect(result.rows.find((r) => r["Contacts"]?.includes("Dave"))).toBeUndefined();
     expect(result.stats.orphanContacts).toBe(1);
   });
@@ -436,7 +449,7 @@ describe("SIMPRO_QUOTES_BY_SITE — site-iteration template for EQ Quotes", () =
     expect(result.rows[1]!["Site Address"]).toBe("10 Industrial Dr, Botany, NSW, 2019");
   });
 
-  it("drops orphan sites (customer ID not in customer file) silently", () => {
+  it("surfaces orphan sites by default (every row out)", () => {
     // Add a fourth site whose Customer ID 999 isn't in the customer file.
     const b = bundle();
     const sitesSheet = b.site!;
@@ -451,9 +464,29 @@ describe("SIMPRO_QUOTES_BY_SITE — site-iteration template for EQ Quotes", () =
     });
     const template = BUILTIN_TEMPLATES.find((t) => t.id === "simpro-quotes-by-site")!;
     const result = renderTemplate(template, b);
-    // Still only the 3 customer-attached sites — orphan dropped
+    expect(result.rows).toHaveLength(4);
+    const orphan = result.rows.find((r) => r["Site Name"] === "Orphan Site");
+    expect(orphan).toBeDefined();
+    expect(orphan!["Customer Name"]).toContain("orphan");
+    expect(result.stats.orphanSites).toBe(1);
+  });
+
+  it("drops orphan sites only when orphanStrategy is explicitly 'drop'", () => {
+    const b = bundle();
+    b.site!.rows.push({
+      "simPRO Site ID": "504",
+      "simPRO Customer ID": "999",
+      "Site Name": "Orphan Site",
+      "Street Address": "1 Nowhere St",
+      "Suburb": "Lost",
+      "State": "NSW",
+      "Postcode": "0000",
+    });
+    const template = BUILTIN_TEMPLATES.find((t) => t.id === "simpro-quotes-by-site")!;
+    const result = renderTemplate(template, b, { orphanStrategy: "drop" });
     expect(result.rows).toHaveLength(3);
     expect(result.rows.find((r) => r["Site Name"] === "Orphan Site")).toBeUndefined();
+    expect(result.stats.orphanSites).toBe(1);
   });
 
   it("defaults Currency to AUD when the customer's currency is blank", () => {
@@ -535,17 +568,33 @@ describe("multi-customer sites — SimPRO comma-separated Customer ID cells", ()
     expect(acmeHq["Linked Customer Names"]).toBe("");
   });
 
-  it("site-iteration: drops only when the PRIMARY id is unknown (true orphan)", () => {
+  it("site-iteration: surfaces when the PRIMARY id is unknown (true orphan)", () => {
     const template = BUILTIN_TEMPLATES.find((t) => t.id === "simpro-quotes-by-site")!;
     const b = bundleWithMultiTenantSite();
-    // Add a site whose primary ID is unknown (999) but second is known (101).
-    // CLI semantics: drop, because primary doesn't resolve.
+    // Primary ID unknown (999) even though second is known (101) — primary
+    // is authoritative; surface as orphan rather than silently inventing a
+    // join to the secondary.
     b.site!.rows.push({
       "simPRO Site ID": "505",
       "simPRO Customer ID": "999, 101",
       "Site Name": "Bad Primary Site",
     });
     const result = renderTemplate(template, b);
+    const orphan = result.rows.find((r) => r["Site Name"] === "Bad Primary Site");
+    expect(orphan).toBeDefined();
+    expect(orphan!["Customer Name"]).toContain("orphan");
+    expect(orphan!["Customer ID"]).toBe("999");
+  });
+
+  it("site-iteration: drop strategy still loses true orphans", () => {
+    const template = BUILTIN_TEMPLATES.find((t) => t.id === "simpro-quotes-by-site")!;
+    const b = bundleWithMultiTenantSite();
+    b.site!.rows.push({
+      "simPRO Site ID": "505",
+      "simPRO Customer ID": "999, 101",
+      "Site Name": "Bad Primary Site",
+    });
+    const result = renderTemplate(template, b, { orphanStrategy: "drop" });
     expect(result.rows.find((r) => r["Site Name"] === "Bad Primary Site")).toBeUndefined();
   });
 

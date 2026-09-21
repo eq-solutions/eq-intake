@@ -22,6 +22,7 @@ import siteSchema     from '@eq/schemas/schemas/site.schema.json';
 import contactSchema  from '@eq/schemas/schemas/contact.schema.json';
 import staffSchema    from '@eq/schemas/schemas/staff.schema.json';
 import licenceSchema  from '@eq/schemas/schemas/licence.schema.json';
+import assetSchema    from '@eq/schemas/schemas/asset.schema.json';
 
 import type { SupabaseLikeClient } from './canonical/commit-canonical.js';
 import type {
@@ -31,6 +32,7 @@ import type {
   GapItem,
   ReviewFlag,
   TidyReport,
+  TidyNotScanned,
   TidyPassOpts,
   TidyCommitOpts,
   TidyCommitResult,
@@ -48,7 +50,7 @@ const SCHEMAS: Partial<Record<TidyEntity, unknown>> = {
   contact:  contactSchema,
   staff:    staffSchema,
   licence:  licenceSchema,
-  // assets schema is not yet in @eq/schemas — skip for now
+  asset:    assetSchema,
 };
 
 const ENTITY_TABLES: Record<TidyEntity, string> = {
@@ -218,6 +220,8 @@ interface EntityScanResult {
   autoFixes:    TidyFix[];
   gaps:         GapItem[];
   reviewFlags:  ReviewFlag[];
+  /** Set when this entity could not be scanned — never a quiet empty report. */
+  notScanned?:  TidyNotScanned;
 }
 
 async function scanEntity(
@@ -230,8 +234,18 @@ async function scanEntity(
   const schema = SCHEMAS[entity];
 
   if (!schema) {
-    // Asset schema not yet in package — skip silently
-    return { entity, rowsScanned: 0, autoFixes: [], gaps: [], reviewFlags: [] };
+    // Every row in deserves a row out — a missing schema is an accountable
+    // skip, not a quiet "0 rows, all fine" report.
+    const reason = `No tidy schema wired for ${entity} yet — not scanned.`;
+    onProgress?.(reason);
+    return {
+      entity,
+      rowsScanned: 0,
+      autoFixes: [],
+      gaps: [],
+      reviewFlags: [],
+      notScanned: { entity, table, reason },
+    };
   }
 
   onProgress?.(`Scanning ${table}…`);
@@ -403,7 +417,7 @@ async function scanEntity(
 // ---------------------------------------------------------------------------
 
 const DEFAULT_ENTITIES: TidyEntity[] = [
-  'customer', 'site', 'contact', 'staff', 'licence',
+  'customer', 'site', 'contact', 'staff', 'licence', 'asset',
 ];
 
 export async function runTidyPass(opts: TidyPassOpts): Promise<TidyReport> {
@@ -412,9 +426,10 @@ export async function runTidyPass(opts: TidyPassOpts): Promise<TidyReport> {
 
   progress('Starting tidy pass…');
 
-  const allFixes:   TidyFix[]    = [];
-  const allGaps:    GapItem[]    = [];
-  const allFlags:   ReviewFlag[] = [];
+  const allFixes:   TidyFix[]        = [];
+  const allGaps:    GapItem[]        = [];
+  const allFlags:   ReviewFlag[]     = [];
+  const notScanned: TidyNotScanned[] = [];
   let   totalRows = 0;
 
   for (const entity of entities) {
@@ -428,6 +443,7 @@ export async function runTidyPass(opts: TidyPassOpts): Promise<TidyReport> {
     allGaps.push(...scan.gaps);
     allFlags.push(...scan.reviewFlags);
     totalRows += scan.rowsScanned;
+    if (scan.notScanned) notScanned.push(scan.notScanned);
   }
 
   progress('Tidy scan complete.');
@@ -439,12 +455,14 @@ export async function runTidyPass(opts: TidyPassOpts): Promise<TidyReport> {
     gaps:          allGaps,
     orphans:       [],   // caller merges orphan-check result into this
     review_flags:  allFlags,
+    not_scanned:   notScanned,
     summary: {
       total_rows_scanned:  totalRows,
       auto_fixes_found:    allFixes.length,
       gaps_found:          allGaps.length,
       orphans_found:       0,
       review_flags_found:  allFlags.length,
+      not_scanned_count:   notScanned.length,
     },
   };
 }

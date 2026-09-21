@@ -85,6 +85,7 @@ export type {
   OrphanItem,
   OrphanType,
   ReviewFlag,
+  TidyNotScanned,
   TidyReport,
   TidyPassOpts,
   TidyCommitOpts,

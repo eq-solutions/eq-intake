@@ -108,6 +108,13 @@ export interface ReviewFlag {
   message:   string;
 }
 
+/** Entity the tidy pass could not scan — accountable skip, never a quiet hole. */
+export interface TidyNotScanned {
+  entity: TidyEntity;
+  table:  string;
+  reason: string;
+}
+
 // ---------------------------------------------------------------------------
 // The full tidy report
 // ---------------------------------------------------------------------------
@@ -119,12 +126,15 @@ export interface TidyReport {
   gaps:          GapItem[];
   orphans:       OrphanItem[];
   review_flags:  ReviewFlag[];
+  /** Entities requested but not scanned (missing schema, etc.). */
+  not_scanned:   TidyNotScanned[];
   summary: {
     total_rows_scanned:  number;
     auto_fixes_found:    number;
     gaps_found:          number;
     orphans_found:       number;
     review_flags_found:  number;
+    not_scanned_count:   number;
   };
 }
 

@@ -127,6 +127,63 @@ describe("runTidyPass — required-field gaps", () => {
   });
 });
 
+describe("runTidyPass — assets (no silent skip)", () => {
+  function fakeAssetClient(assetRows: unknown[]): SupabaseLikeClient {
+    return {
+      rpc: async (name: string, params: Record<string, unknown>) => {
+        if (name === "eq_tidy_read_entity" && params.p_table === "assets") {
+          return { data: assetRows, error: null };
+        }
+        return { data: [], error: null };
+      },
+    } as unknown as SupabaseLikeClient;
+  }
+
+  it("scans assets when the schema is wired (no quiet empty report)", async () => {
+    const client = fakeAssetClient([
+      {
+        asset_id: "a-1",
+        tenant_id: TENANT,
+        site_id: "00000000-0000-4000-8000-000000000001",
+        asset_type: "switchboard",
+        name: "MSB-1",
+      },
+    ]);
+
+    const report = await runTidyPass({
+      supabase: client,
+      tenantId: TENANT,
+      entities: ["asset"],
+    });
+
+    expect(report.summary.total_rows_scanned).toBe(1);
+    expect(report.not_scanned).toEqual([]);
+    expect(report.summary.not_scanned_count).toBe(0);
+  });
+
+  it("flags a missing required asset field as a gap, not a silent pass", async () => {
+    const client = fakeAssetClient([
+      {
+        asset_id: "a-1",
+        tenant_id: TENANT,
+        site_id: "00000000-0000-4000-8000-000000000001",
+        asset_type: "switchboard",
+        name: null,
+      },
+    ]);
+
+    const report = await runTidyPass({
+      supabase: client,
+      tenantId: TENANT,
+      entities: ["asset"],
+    });
+
+    const gap = report.gaps.find((g) => g.field === "name");
+    expect(gap).toBeDefined();
+    expect(gap!.gap_type).toBe("required_missing");
+  });
+});
+
 describe("commitTidyFixes", () => {
   // eq_create_intake_event / eq_finish_intake_event were dropped from every
   // tenant plane 2026-05-24 (same finding as commit-canonical.ts, PR #142).
