@@ -91,8 +91,6 @@ interface DuplicateGroup {
   rows: DrillRow[];
 }
 
-const DEFAULT_TENANT_ID = "00000000-0000-4000-8000-000000000001";
-
 // Every entity reads from the shared field-importance rulebook (see
 // @eq/intake's field-importance.ts) so this list can't quietly disagree
 // with the Overview score's gap list again — that drift (this list once
