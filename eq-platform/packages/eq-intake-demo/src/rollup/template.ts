@@ -87,10 +87,9 @@ export interface DestinationTemplate {
    * How rows are iterated. Default 'customer' — one row per customer with
    * the customer's sites + contacts available via context. 'site' iterates
    * once per site, with each site's parent customer + that customer's
-   * contacts in context (orphan sites whose customer ID isn't in the
-   * customer file are dropped). 'contact' iterates once per contact, with
-   * the contact's parent customer + that customer's sites in context
-   * (orphan contacts whose customer ID isn't in the customer file are dropped).
+   * contacts in context. 'contact' iterates once per contact. Orphan
+   * sites/contacts (customer ID missing from the customers file) are
+   * surfaced by default — pass orphanStrategy: "drop" to opt into loss.
    */
   iterationMode?: "customer" | "site" | "contact";
 }
@@ -98,7 +97,12 @@ export interface DestinationTemplate {
 export interface TemplateRenderOptions {
   /** Skip customers that have no sites and no contacts. Default false. */
   skipEmpty?: boolean;
-  /** What to do with rows in `sites`/`contacts` whose customer ID isn't in the customers file. */
+  /**
+   * What to do with sites/contacts whose customer ID isn't in the customers
+   * file. Default is include — every row in deserves a row out. Pass "drop"
+   * only when the caller explicitly accepts losing those rows (and still sees
+   * the count in stats.orphanSites / orphanContacts).
+   */
   orphanStrategy?: "drop" | "include-as-pseudo-customer" | "separate-section";
   /** Normalise ALL-CAPS company names + emails to standard case. Default false. */
   normaliseCase?: boolean;
@@ -197,14 +201,29 @@ export function renderTemplate(
       outputRows.push(buildRow(template, ctx));
     }
   } else if (iterationMode === "contact") {
-    // 'contact' iteration: one row per contact. Each contact's simPRO Customer
-    // ID is resolved to find the parent customer and that customer's sites.
-    // Orphan contacts (no matching customer ID) are dropped — same semantics as
-    // 'site' iteration dropping orphan sites.
+    // 'contact' iteration: one row per contact. Orphans (no matching customer)
+    // are surfaced by default — every row in deserves a row out. Opt in to
+    // orphanStrategy: "drop" only when the caller explicitly accepts loss.
+    const orphanStrategy = opts.orphanStrategy ?? "include-as-pseudo-customer";
     for (const cc of contacts) {
       const id = stringOf(cc["simPRO Customer ID"]);
       const parent = id ? customerById.get(id) : undefined;
-      if (!parent) continue; // orphan contact
+      if (!parent) {
+        if (orphanStrategy === "drop") continue;
+        const ctx: ColumnContext = {
+          customer: {
+            "simPRO Customer ID": id || "(blank)",
+            "Company Name": id
+              ? `(orphan — references unknown customer ID ${id})`
+              : "(orphan — contact has no customer ID)",
+          },
+          sites: [],
+          contacts: [cc],
+          contact: opts.normaliseCase ? normaliseRowCase(cc) : cc,
+        };
+        outputRows.push(buildRow(template, ctx));
+        continue;
+      }
       const customerSites = sitesByCustomer.get(id) ?? [];
       const ctx: ColumnContext = {
         customer: opts.normaliseCase ? normaliseRowCase(parent) : parent,
@@ -220,17 +239,29 @@ export function renderTemplate(
       if ((contactsByCustomer.get(id) ?? []).length > 0) customersWithContact++;
     }
   } else {
-    // 'site' iteration: one row per site. The site cell may list multiple
-    // customer IDs (multi-tenant sites). We treat the FIRST id as primary —
-    // it becomes the `customer` for the row — and stash the rest in
-    // `linkedCustomers` so templates can surface them in dedicated columns.
-    // A site is only dropped as orphan when its PRIMARY id isn't in the
-    // customer file (matches the CLI generate-quotes-csv.mjs semantics).
+    // 'site' iteration: one row per site. Orphans surfaced by default.
+    const orphanStrategy = opts.orphanStrategy ?? "include-as-pseudo-customer";
     for (const s of sites) {
       const ids = parseCustomerIds(s["simPRO Customer ID"]);
       const primaryId = ids[0] ?? "";
       const parent = primaryId ? customerById.get(primaryId) : undefined;
-      if (!parent) continue; // orphan site, drop
+      if (!parent) {
+        if (orphanStrategy === "drop") continue;
+        const ctx: ColumnContext = {
+          customer: {
+            "simPRO Customer ID": primaryId || "(blank)",
+            "Company Name": primaryId
+              ? `(orphan — references unknown customer ID ${primaryId})`
+              : "(orphan — site has no customer ID)",
+          },
+          sites: [s],
+          contacts: [],
+          site: opts.normaliseCase ? normaliseRowCase(s) : s,
+          linkedCustomers: [],
+        };
+        outputRows.push(buildRow(template, ctx));
+        continue;
+      }
       const linkedCustomers: Row[] = [];
       for (const id of ids.slice(1)) {
         const linked = customerById.get(id);
@@ -257,10 +288,13 @@ export function renderTemplate(
     }
   }
 
-  // Orphan handling — append pseudo-customer rows for sites/contacts whose
-  // Customer ID isn't in the customers file. Default is 'drop'; callers must
-  // opt in to 'include-as-pseudo-customer' if they want orphans surfaced.
-  if ((opts.orphanStrategy ?? "drop") === "include-as-pseudo-customer") {
+  // Orphan handling for customer-iteration — append pseudo-customer rows for
+  // sites/contacts whose Customer ID isn't in the customers file. Default is
+  // include (every row out). Site/contact iteration surfaces orphans in-loop.
+  if (
+    iterationMode === "customer" &&
+    (opts.orphanStrategy ?? "include-as-pseudo-customer") === "include-as-pseudo-customer"
+  ) {
     const orphanCustomerIds = new Set<string>();
     for (const s of sites) {
       const ids = parseCustomerIds(s["simPRO Customer ID"]);

@@ -91,10 +91,16 @@ Pri     What                                              Unlocks for whom/when 
             Start: eq-validation validate.ts,
             commit-canonical.ts, tidy-pass.ts (assets),
             rollup template orphan paths.
+           DONE 2026-09-21 (this lineage): rollup default
+           include + site/contact orphan rows; tidy assets
+           wired + not_scanned accountability. Re-verify
+           validate/commit paths before claiming closed.
 
 ★★★     B. Tidy / Overview honesty for assets             Ops sees “assets not scanned”      2–4h    ★★
            tidy-pass currently skips assets when schema   instead of a quiet hole
            missing — surface it; don’t pretend scanned.
+           DONE 2026-09-21: asset schema wired into tidy;
+           not_scanned[] on TidyReport + UI banner.
 
 ★★      C. Bring Data In: redesign leftovers              One-screen completeness            2–6h    ★★
            (INTAKE-REDESIGN-SPEC open items):

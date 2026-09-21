@@ -1635,7 +1635,7 @@ function TidyPanel({
 
   if (!report) return <div className="eq-tidy" />;
 
-  const { auto_fixes, gaps, review_flags, summary } = report;
+  const { auto_fixes, gaps, review_flags, not_scanned = [], summary } = report;
 
   // Fields with more than one gap are worth a bulk-fill link — a single gap
   // isn't worth switching views for, the inline "Edit" below is just as fast.
@@ -1644,6 +1644,12 @@ function TidyPanel({
     bulkFillCandidates.set(g.field, (bulkFillCandidates.get(g.field) ?? 0) + 1);
   }
   const bulkFillGaps = bulkFillField ? gaps.filter((g) => g.field === bulkFillField) : [];
+
+  const allClean =
+    auto_fixes.length === 0 &&
+    gaps.length === 0 &&
+    review_flags.length === 0 &&
+    not_scanned.length === 0;
 
   const fixColumns: TableColumn<TidyFix>[] = [
     {
@@ -1818,9 +1824,6 @@ function TidyPanel({
     },
   ];
 
-  const allClean =
-    auto_fixes.length === 0 && gaps.length === 0 && review_flags.length === 0;
-
   return (
     <div className="eq-tidy">
       {/* Summary strip */}
@@ -1843,10 +1846,33 @@ function TidyPanel({
             {review_flags.length} need review
           </span>
         )}
+        {not_scanned.length > 0 && (
+          <span className="eq-tidy__count eq-tidy__count--flag">
+            {not_scanned.length} not scanned
+          </span>
+        )}
         {allClean && (
           <span className="eq-tidy__count eq-tidy__count--ok">All clean</span>
         )}
       </div>
+
+      {not_scanned.length > 0 && (
+        <div className="eq-tidy__section" role="status">
+          <div className="eq-tidy__section-header">
+            <div className="eq-tidy__section-header-text">
+              <h3 className="eq-tidy__section-title">Not scanned</h3>
+              <p className="eq-tidy__section-hint">
+                These lists were requested but not checked — so we don&apos;t pretend they&apos;re clean.
+              </p>
+            </div>
+          </div>
+          <ul className="eq-tidy__not-scanned-list">
+            {not_scanned.map((item) => (
+              <li key={item.entity}>{item.reason}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Auto-fixes */}
       {auto_fixes.length > 0 && (
