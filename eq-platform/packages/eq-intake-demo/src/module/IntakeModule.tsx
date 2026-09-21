@@ -194,6 +194,10 @@ export function IntakeModule(props: IntakeModuleProps): JSX.Element {
   const [drillGapField, setDrillGapField] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showTradesSettings, setShowTradesSettings] = useState(false);
+  // One "Settings" entry point instead of two unlabeled icon buttons —
+  // opens a small menu to choose which settings screen, instead of making
+  // the tenant guess what a bare ⚙ vs 🔧 means.
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   // Single fetch of the tenant's saved field-importance corrections — shared
   // by Overview's score, the Gaps filter, and the settings screen itself, so
   // changing a tier here is reflected everywhere without a page reload.
@@ -224,6 +228,7 @@ export function IntakeModule(props: IntakeModuleProps): JSX.Element {
       setDrillGapField(null);
       setShowSettings(false);
       setShowTradesSettings(false);
+      setShowSettingsMenu(false);
     }
   }
 
@@ -325,26 +330,49 @@ export function IntakeModule(props: IntakeModuleProps): JSX.Element {
         )}
 
         {props.canEditCanonical && (
-          <button
-            type="button"
-            className="eq-intake-tab__settings"
-            title="Field importance settings"
-            aria-label="Field importance settings"
-            onClick={() => { setMode("health"); setDrillEntity(null); setShowTradesSettings(false); setShowSettings(true); }}
-          >
-            ⚙
-          </button>
-        )}
-        {props.canEditCanonical && (
-          <button
-            type="button"
-            className="eq-intake-tab__settings"
-            title="Trades settings"
-            aria-label="Trades settings"
-            onClick={() => { setMode("health"); setDrillEntity(null); setShowSettings(false); setShowTradesSettings(true); }}
-          >
-            🔧
-          </button>
+          <span className="eq-intake-tab__settings-wrap">
+            <button
+              type="button"
+              className="eq-intake-tab__settings"
+              title="Settings"
+              aria-label="Settings"
+              aria-haspopup="menu"
+              aria-expanded={showSettingsMenu}
+              onClick={() => setShowSettingsMenu((v) => !v)}
+            >
+              ⚙ Settings
+            </button>
+            {showSettingsMenu && (
+              <div className="eq-intake-settings-menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMode("health");
+                    setDrillEntity(null);
+                    setShowTradesSettings(false);
+                    setShowSettings(true);
+                    setShowSettingsMenu(false);
+                  }}
+                >
+                  Field importance
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMode("health");
+                    setDrillEntity(null);
+                    setShowSettings(false);
+                    setShowTradesSettings(true);
+                    setShowSettingsMenu(false);
+                  }}
+                >
+                  Trades
+                </button>
+              </div>
+            )}
+          </span>
         )}
       </div>
 
