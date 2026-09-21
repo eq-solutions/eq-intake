@@ -3409,10 +3409,15 @@ button.eq-primary:hover {
   border-bottom: 2px solid var(--eq-line);
 }
 
-.eq-intake-tab__settings {
+.eq-intake-tab__settings-wrap {
+  position: relative;
   margin-left: auto;
   align-self: center;
-  font-size: 16px;
+}
+
+.eq-intake-tab__settings {
+  font-size: 13px;
+  font-weight: 500;
   line-height: 1;
   padding: 6px 10px;
   background: transparent;
@@ -3420,12 +3425,43 @@ button.eq-primary:hover {
   border-radius: 4px;
   color: var(--eq-muted);
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .eq-intake-tab__settings:hover {
   color: var(--eq-ink);
   background: var(--eq-ice);
   border-color: var(--eq-line);
+}
+
+.eq-intake-settings-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  background: #fff;
+  border: 1px solid var(--eq-line);
+  border-radius: 6px;
+  padding: 4px;
+}
+
+.eq-intake-settings-menu button {
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--eq-ink);
+  cursor: pointer;
+}
+
+.eq-intake-settings-menu button:hover {
+  background: var(--eq-ice);
 }
 
 .eq-intake-tab {
