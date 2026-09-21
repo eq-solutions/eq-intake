@@ -58,8 +58,9 @@ const state: {
 // CSV
 // ---------------------------------------------------------------------------
 function parseCsv(text: string): { header: string[]; rows: Record<string, string>[] } {
-  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
-  const lines = text.replace(/\r/g, "").split("\n").filter((l) => l.length > 0);
+  let body = text;
+  if (body.charCodeAt(0) === 0xfeff) body = body.slice(1);
+  const lines = body.replace(/\r/g, "").split("\n").filter((l) => l.length > 0);
   const parseRow = (line: string): string[] => {
     const out: string[] = [];
     let cur = "";

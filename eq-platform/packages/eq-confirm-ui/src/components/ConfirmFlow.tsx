@@ -154,6 +154,8 @@ function ProgressBar({
       <div
         className="eq-progress__bar"
         role="progressbar"
+        tabIndex={0}
+        aria-label={label}
         aria-valuenow={pct}
         aria-valuemin={0}
         aria-valuemax={100}

@@ -52,6 +52,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Lint (Biome)
+        run: pnpm lint
+
       # Build MUST run before typecheck: eq-validation imports @eq/ai, and TypeScript
       # resolves that workspace dependency against its built dist/index.d.ts, not its
       # source. Verified on real CI (not just locally): typecheck-before-build failed

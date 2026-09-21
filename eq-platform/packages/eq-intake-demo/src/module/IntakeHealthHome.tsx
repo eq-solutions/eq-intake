@@ -281,7 +281,7 @@ function ScoreRing({ composite }: { composite: number }): JSX.Element {
   return (
     <div className="eq-health-ring-wrap">
       <div className="eq-health-ring-svg">
-        <svg width="96" height="96" viewBox="0 0 96 96" fill="none">
+        <svg width="96" height="96" viewBox="0 0 96 96" fill="none" aria-hidden="true">
           <circle cx="48" cy="48" r={r} stroke="var(--eq-line)" strokeWidth="7" />
           <circle
             cx="48" cy="48" r={r}

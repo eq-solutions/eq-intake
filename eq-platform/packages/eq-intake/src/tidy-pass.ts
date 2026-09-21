@@ -276,7 +276,7 @@ async function scanEntity(
 
   // Run validation in one batch call (pure in-memory — no DB calls needed
   // because FK resolution is skipped; we're validating field values only).
-  let result;
+  let result: Awaited<ReturnType<typeof validate>>;
   try {
     result = await validate({
       schema:               schema as Parameters<typeof validate>[0]['schema'],

@@ -44,6 +44,9 @@ Reference docs, read on demand:
 - **[`prompts/05-continue-improve-intake.md`](prompts/05-continue-improve-intake.md)**
   — Session prompt to keep improving Intake (trust, depth, no silent
   drops). Paste it to start the next intake session.
+- **[`BENCHMARK-2026-09-21.md`](BENCHMARK-2026-09-21.md)** — Industry
+  scorecard (**38/50**). Raise it with
+  [`prompts/06-raise-industry-benchmark.md`](prompts/06-raise-industry-benchmark.md).
 
 Historical planning (archaeology — not the live queue):
 
@@ -61,6 +64,7 @@ want the product why, read the conduit doc.
 cd eq-platform
 pnpm install                # codegen fires automatically via prepare hook
 pnpm -r build               # all packages
+pnpm lint                   # Biome lint gate (packages/*)
 pnpm -r test                # unit + sample-fixture validation tests
 pnpm schemas:lint           # validate every schema against draft 2020-12
 ```

@@ -240,7 +240,6 @@ async function classifyWithAi(
       }
     } catch {
       // One AI failure shouldn't kill classification — try the next candidate.
-      continue;
     }
   }
 
