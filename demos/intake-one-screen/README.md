@@ -1,8 +1,11 @@
-# EQ Intake — one screen
+# EQ Intake — one screen (prototype)
 
-The working version of the **"Bring something in"** redesign spec'd in
-[`INTAKE-REDESIGN-SPEC.md`](../../INTAKE-REDESIGN-SPEC.md). One screen: drop a
-file → we work out what it is → pick where it goes → done.
+Static HTML prototype of the **"Bring something in"** redesign. The
+**shipped** module is `@eq/intake-demo` (`IntakeModule`) — use that for
+real flows. This folder stays as a no-build sketch of the one-screen UX.
+
+Spec: [`INTAKE-REDESIGN-SPEC.md`](../../INTAKE-REDESIGN-SPEC.md).
+One screen: drop a file → we work out what it is → pick where it goes → done.
 
 ## Run it
 

@@ -1,20 +1,18 @@
 /**
  * @eq/intake — the standalone parser for EQ.
  *
+ * Turns the shapes humans already have (CSV / XLSX / PDF / photos) into
+ * rows ready for @eq/validation — AI learns each file's shape so nobody
+ * retypes into the next system by hand.
+ *
  * Public API:
- *   import { parseCsv } from '@eq/intake';
+ *   import { parseFile, parseCsv } from '@eq/intake';
  *
  *   const parsed = await parseCsv(file);
- *   // parsed.rows are Record<string, unknown>[] ready to feed @eq/validation's validate()
+ *   // parsed.rows are Record<string, unknown>[] ready for validate()
  *
- * Readers planned:
- *   - CSV         (this sprint — Papa Parse, encoding/delimiter sniff, BOM strip)
- *   - XLSX        (next — SheetJS, multi-sheet, header-row detection)
- *   - PDF text    (Sprint C — born-digital PDFs)
- *   - PDF/image   (Sprint D — preprocessing + @eq/ai extract())
- *
- * After the readers exist, a top-level parseFile() orchestrates:
- *   readers → @eq/ai classify → @eq/ai map (or signature-cache hit) → @eq/validation
+ * Readers shipped: CSV, XLSX, PDF, photo.
+ * Orchestrator: parseFile() → classify → map (or signature-cache hit) → validate.
  */
 
 export { parseCsv } from "./readers/csv.js";

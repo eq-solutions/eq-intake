@@ -105,7 +105,7 @@ export function ConfirmFlow(props: ConfirmFlowProps): JSX.Element {
               : `Committing ${status.committed.toLocaleString()} of ${status.total.toLocaleString()} row${status.total === 1 ? "" : "s"}…`
           }
           ratio={status.total === 0 ? 1 : status.committed / status.total}
-          hint="The commit RPC runs server-side. Hold tight."
+          hint="Saving into EQ on the server. Hold tight."
         />
       );
 
@@ -248,9 +248,9 @@ function hintForPhase(phase: string): string {
     case "mapping":
       return "The AI mapper threw before returning. If this is a real-Anthropic run, the most common causes are an expired API key, a quota limit, or a brief upstream blip — wait a moment and try again.";
     case "validating":
-      return "The validator threw before producing a result. The file made it through parsing, so this is usually a schema mismatch — check the canonical fields against what's actually in the file.";
+      return "The validator threw before producing a result. The file made it through parsing, so this is usually a schema mismatch — check EQ's field list against what's actually in the file.";
     case "committing":
-      return "The commit RPC threw. Whatever was meant to go into the canonical layer didn't. No partial commit — start over once the back-end is healthy.";
+      return "Saving into EQ failed. Nothing partial was written — start over once the back-end is healthy.";
     default:
       return "Try dropping the file again. If it keeps failing, check the source.";
   }

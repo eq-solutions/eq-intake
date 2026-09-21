@@ -3,7 +3,7 @@
 > **For anyone (or any AI session) joining this project cold.** Read this
 > first. The deeper docs are linked at the end.
 >
-> Last updated 2026-05-31.
+> Last updated 2026-09-21.
 
 ---
 
@@ -139,13 +139,11 @@ C:\Projects\eq-intake\           ← THIS REPO (intake + shell)
 ├── EQ-FORMAT.md                 — reshape-out profiles (3 built) + aspirational cleanup-in
 ├── EQ-CARDS-INTAKE-BRIDGE.md    — Cards migration plan
 ├── EQ-BRIEFING.md               — this file
-├── sql/                         — base migrations 001-012 (paste-ready, not yet applied)
-├── demos/                       — standalone Node scripts
+├── CLAUDE.md                    — live-plane steward rules (DML-only)
+├── sql/                         — tenant SQL staging (hand to eq-shell pipe)
+├── demos/                       — standalone Node scripts + prototypes
 │   └── simpro-customer-rollup/  — the SimPRO→SharePoint CSV joiner
-└── eq-platform/                 — pnpm workspace
-    ├── apps/
-    │   └── eq-shell/            — the per-tenant shell app
-    │       └── DEPLOY.md        — step-by-step deploy guide
+└── eq-platform/                 — pnpm workspace (packages only)
     ├── packages/
     │   ├── eq-schemas/          — JSON Schemas + TS/Zod/SQL codegen
     │   ├── eq-validation/       — coercers + validator orchestrator
@@ -157,6 +155,7 @@ C:\Projects\eq-intake\           ← THIS REPO (intake + shell)
     └── scripts/
         └── db-apply.ts          — migration sequencer
 
+C:\Projects\eq-shell\             ← separate repo (tenant shell UI)
 C:\Projects\eq-cards\             ← separate repo (EQ Cards)
 ```
 
@@ -167,20 +166,39 @@ C:\Projects\eq-cards\             ← separate repo (EQ Cards)
 A snapshot decays in days. Specific claims like "12 schemas" or "293 tests passing" stop being true the moment the next commit lands. So this section captures the *shape*, not the *count* — `git log` and the package source are authoritative for what's running today.
 
 **Shape of what's running:**
-- A growing set of canonical JSON Schemas in `schemas/` (and a copy in `eq-platform/packages/eq-schemas/src/schemas/` that's mid-sync — see memory `project_eq_platform_schema_drift_pending`). 42 entities across staff / site / asset / customer / contact / service / safety / tests as of the S3 seed (2026-05-24).
-- SQL codegen + a migration sequencer producing a single SQL file paste-ready for any Supabase project.
-- `@eq/shell` with Supabase Auth + lazy module routing + SKS palette.
-- `@eq/intake-demo` (the Intake module) — running and exercised against real SimPRO exports. Mounts in shell at `/intake`. Supports SimPRO bundle drop → five destination templates (SharePoint rollup / Quotes-by-site / Xero ContactsImport / MYOB Card File / Outlook contacts).
-- `@eq/format-ui` — three SimPRO-quote reshape-out profiles (BOM, device-register, labour-summary). See `EQ-FORMAT.md`.
-- `/api/admin/export` live on eq-solves-service.netlify.app, returning canonical-shape JSON for the entities currently wired (memory `project_admin_export_endpoint` has the live list).
-- Cards licence-canonical entity work landed 2026-05-20 to 21 (Cards Unit 2.A) — see commits `06fdcbd`, `ac4ccc6`, the PR #5 merge.
-- Maximo PDF skill (`@eq/intake/skills/maximo-pdf-wo`) shipped and deliberately parked — see memory `project_maximo_pdf_wo_skill` for the cost/latency reasoning.
+- Canonical JSON Schemas in two hand-authored trees (`schemas/` and
+  `eq-platform/packages/eq-schemas/src/schemas/`). Shared filenames are
+  gated by `scripts/check-schema-sync.mjs` — see README "Schema ownership".
+- SQL codegen + a migration sequencer producing a single SQL file for the
+  owning pipe (eq-shell tenant-migrations) — not freestyle paste onto live.
+- Shell UI lives in the separate **eq-shell** repo (removed from this tree
+  in #51). This repo ships the intake/spine packages it mounts.
+- `@eq/intake-demo` (the Intake module) — running and exercised against real
+  SimPRO exports. Mounts in shell at `/intake`. Supports SimPRO bundle drop →
+  five destination templates (SharePoint rollup / Quotes-by-site / Xero
+  ContactsImport / MYOB Card File / Outlook contacts).
+- `@eq/format-ui` — three SimPRO-quote reshape-out profiles (BOM,
+  device-register, labour-summary). See `EQ-FORMAT.md`.
+- `/api/admin/export` live on eq-solves-service.netlify.app, returning
+  canonical-shape JSON for the entities currently wired.
+- Cards licence-canonical entity work landed 2026-05-20 to 21 (Cards Unit
+  2.A) — see commits `06fdcbd`, `ac4ccc6`, the PR #5 merge.
+- Maximo PDF skill (`@eq/intake/skills/maximo-pdf-wo`) shipped and
+  deliberately parked — cost/latency didn't justify unparking.
 
 These are *starting points, not finished things*. Real running will reveal flaws. No "production-ready" claims for any of it.
 
-**Canonical Supabase: provisioned and live.** `sks-canonical` (`ehowgjardagevnrluult`, Sydney) is the SKS production tenant data plane — populated (125 customers, 331 contacts, 50 staff, 4,808 assets, PPM tables + RPCs) and migrations 001–035 applied. Auth + tenant routing live on the control plane `eq-canonical` (see the tenancy doc's "Project roles — AUDITED" table). Field LIVE + Cards still sit on their own Supabases until their planned cutovers.
+**Canonical Supabase: provisioned and live.** `sks-canonical`
+(`ehowgjardagevnrluult`, Sydney) is the SKS production tenant data plane —
+populated and stewarded under `CLAUDE.md` (DML-only on live). Auth + tenant
+routing live on the control plane `eq-canonical` (see the tenancy doc's
+"Project roles — AUDITED" table). Field LIVE + Cards still sit on their own
+Supabases until their planned cutovers.
 
-**Where to look for what's next:** `PLAN-2026-05-24.md` carries the live 90-day plan. The short version: fix the C1-C2-C3 silent drops, build the Equinix → SimPRO reshape profile, wire Cards onto canonical, and ship the Intake one-screen redesign (see `INTAKE-REDESIGN-SPEC.md` + `demos/intake-one-screen/`). See the full 12-week sequence there.
+**Where to look for what's next:** read `git log` and open PRs. The May
+2026 plan (`PLAN-2026-05-24.md`) is historical context, not the live queue.
+Shipped Intake one-screen lives in `@eq/intake-demo`; `demos/intake-one-screen/`
+is the earlier prototype.
 
 ---
 

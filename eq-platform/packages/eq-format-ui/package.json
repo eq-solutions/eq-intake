@@ -2,7 +2,7 @@
   "name": "@eq/format-ui",
   "version": "0.0.1",
   "private": true,
-  "description": "EQ Format - drop a messy CSV, see canonical validation. Sprint 6 first cut: Vite dev server + API middleware that talks to @eq/ai and @eq/validation. Demo-grade only; no production deploy story yet.",
+  "description": "EQ Format — drop a messy CSV; AI learns its shape, validates against EQ, shows what would land. Local Vite demo + API middleware (@eq/ai + @eq/validation). Demo-grade only.",
   "type": "module",
   "scripts": {
     "dev": "vite",

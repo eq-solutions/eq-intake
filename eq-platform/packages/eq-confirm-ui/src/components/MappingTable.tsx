@@ -126,7 +126,7 @@ export function MappingTable(props: MappingTableProps): JSX.Element {
         </div>
       ) : null}
       <header className="eq-confirm-mapping__header">
-        <h2>Map source columns to canonical fields</h2>
+        <h2>Match your columns to EQ fields</h2>
         <p>
           {headers.length} source columns. {countMapped(userOverrides)} mapped.
           {fields.some((f) => f.required) ? (

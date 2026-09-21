@@ -236,7 +236,7 @@ export function App() {
       <header className="eq-shell__header">
         <div className="eq-shell__brand">
           <h1>EQ Intake</h1>
-          <p>Drag a CSV or XLSX. Watch it flow through parse → map → validate → commit.</p>
+          <p>Drop a sheet. AI learns its shape so you don't retype it into EQ — or out to the next system.</p>
         </div>
         <div className="eq-shell__pills">
           <span
@@ -287,7 +287,7 @@ export function App() {
               className={"eq-mode-tab" + (mode === "single" ? " eq-mode-tab--active" : "")}
               onClick={() => setMode("single")}
             >
-              Single file → canonical
+              Single file → into EQ
             </button>
             <button
               type="button"
@@ -327,7 +327,7 @@ export function App() {
               ))}
             </select>
             <span className="eq-target-selector__hint">
-              Pick the canonical entity you're aiming at. The mapper, classifier,
+              Pick the EQ entity you're aiming at. The mapper, classifier,
               and validator all retarget when you change this.
             </span>
           </section>
