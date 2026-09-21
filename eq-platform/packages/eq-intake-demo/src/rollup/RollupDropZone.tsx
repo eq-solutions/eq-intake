@@ -342,7 +342,7 @@ export function RollupDropZone(): JSX.Element {
               <th>Detected role</th>
               <th>Rows</th>
               <th>Confidence</th>
-              <th></th>
+              <th />
             </tr>
           </thead>
           <tbody>

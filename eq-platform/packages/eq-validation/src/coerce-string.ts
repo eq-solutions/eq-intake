@@ -27,7 +27,7 @@ interface StringOpts extends Partial<CoerceOptions> {
   emptyAsNull?: boolean;
 }
 
-const ZERO_WIDTH = /[\u200B-\u200D\uFEFF\u00AD]/g;
+const ZERO_WIDTH = /\u200B|\u200C|\u200D|\uFEFF|\u00AD/g;
 const WHITESPACE_RUN = /\s+/g;
 
 export function coerceString(

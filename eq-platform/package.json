@@ -12,6 +12,8 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
+    "lint": "biome lint packages --diagnostic-level=error",
+    "lint:fix": "biome check packages --write --diagnostic-level=error",
     "check": "pnpm schemas:lint && pnpm -r --if-present typecheck",
     "check:packages": "pnpm schemas:lint && pnpm -r --filter \"./packages/*\" --filter \"!./packages/eq-format-ui\" --filter \"!./packages/eq-intake-demo\" build && pnpm -r --filter \"./packages/*\" --filter \"!./packages/eq-format-ui\" --filter \"!./packages/eq-intake-demo\" --if-present typecheck",
     "schemas:lint": "pnpm --filter @eq/schemas schemas:lint",
@@ -22,6 +24,7 @@
     "test:integration": "pnpm --filter @eq/ai test:integration"
   },
   "devDependencies": {
+    "@biomejs/biome": "1.9.4",
     "@fontsource/plus-jakarta-sans": "^5.2.8",
     "tsx": "4.19.2",
     "typescript": "5.6.3",

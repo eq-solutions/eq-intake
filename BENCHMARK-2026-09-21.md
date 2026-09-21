@@ -1,6 +1,6 @@
 # EQ Intake — industry benchmark (out of 50)
 
-**Date:** 2026-09-21  
+**Date:** 2026-09-21 (updated same day after L1)  
 **Comparator:** a well-run mid-size TypeScript product engineering org  
 (not FAANG perfection, not early-startup chaos)  
 **Scope:** this repo (`eq-intake`) — packages, schemas, SQL staging, edge
@@ -14,85 +14,65 @@ count where this tree owns the contract.
 
 ## Scorecard
 
-| # | Dimension | Score | Notes |
-|---|---|---:|---|
-| 1 | Product / domain clarity & framing | **4.5** | Conduit frame + anti-drift rules are elite; root MD sprawl is the tax |
-| 2 | Architecture & modularity | **3.5** | Clean package graph; dual schemas + SQL-outside-pipe + edge fns beside packages |
-| 3 | Schema / API contract discipline | **4.0** | JSON Schema → codegen + lint + drift + sync gates; hand-maintaining two trees |
-| 4 | Testing culture | **3.5** | Solid Vitest + fixtures; no coverage gate; edge functions thinly tested |
-| 5 | CI/CD & quality gates | **3.0** | Build/typecheck/test/drift/sync are real; no lint/format, Dependabot, CodeQL |
-| 6 | Documentation & onboarding | **4.5** | Ordered reading list, `.env.example`, steward rules; historical docs crowd |
-| 7 | Observability & operational safety | **3.5** | Live-plane rules, RLS smoke, audit/rate-limit SQL; prod telemetry still thin |
-| 8 | Security & secrets hygiene | **3.5** | Gitignore + env template + RPC tenant guards; no automated SCA/secrets scan |
-| 9 | Developer experience | **3.5** | pnpm + codegen + demos; dual package managers + no shared lint/format |
-| 10 | Continuous improvement culture | **4.5** | Incident→rules→prompts is rare and excellent; formal ADR tree missing |
-| | **Total** | **38 / 50** | |
+| # | Dimension | Before | After | Notes |
+|---|---|---:|---:|---|
+| 1 | Product / domain clarity & framing | 4.5 | **4.5** | Unchanged |
+| 2 | Architecture & modularity | 3.5 | **3.5** | Dual schemas still open (L2) |
+| 3 | Schema / API contract discipline | 4.0 | **4.0** | Unchanged |
+| 4 | Testing culture | 3.5 | **3.5** | Coverage floor still open (L3) |
+| 5 | CI/CD & quality gates | 3.0 | **4.0** | **L1:** Biome lint in `ci.yml` (`pnpm lint`) |
+| 6 | Documentation & onboarding | 4.5 | **4.5** | README documents `pnpm lint` |
+| 7 | Observability & operational safety | 3.5 | **3.5** | Unchanged |
+| 8 | Security & secrets hygiene | 3.5 | **3.5** | Dependabot/CodeQL still open (L4) |
+| 9 | Developer experience | 3.5 | **4.0** | **L1:** one-command lint; format check still ratchet |
+| 10 | Continuous improvement culture | 4.5 | **4.5** | Unchanged |
+| | **Total** | **38** | **39.5 / 50** | |
 
 ### Band
 
 | Band | Meaning |
 |---|---|
 | 45–50 | Industry-leading for a mid-size product org |
-| **38–44** | **Strong — above peer average; clear, fixable gaps** ← here |
+| **38–44** | **Strong — above peer average; clear, fixable gaps** ← here (39.5) |
 | 30–37 | Competent / uneven |
 | &lt;30 | Needs structural remediation |
 
 ---
 
-## Dimension detail
+## L1 evidence (2026-09-21)
 
-### 1. Product / domain clarity — 4.5
-`EQ-AS-CONDUIT.md` + `HOW-WE-WORK-WITH-AI.md` + README standing rules make
-“for whom and when” enforceable. Most orgs never write this down.
+| Claim | Evidence |
+|---|---|
+| Toolchain chosen | **Biome 1.9.4** (one tool; lint gate now, format later) — `eq-platform/biome.json` |
+| Local command | `pnpm lint` → `biome lint packages --diagnostic-level=error` — `eq-platform/package.json` |
+| CI enforces | `.github/workflows/ci.yml` step **Lint (Biome)** before build |
+| Gate is real | Census was 9 errors @ error-level; all fixed in this PR (progressbar a11y, implicit any, ZWJ regex, decorative SVGs, …). `pnpm lint` exits 0 on clean tree. |
+| Scoped | `packages/**` only; ignores `dist/`, `src/generated/` |
+| Style noise dialled | `noNonNullAssertion`, `useLiteralKeys`, `noExplicitAny` off for first land — ratchet later, don’t pretend we fixed 900 style nits |
+| Format | Configured (spaces/2) but **not** a CI fail yet — next ratchet after lint stays green |
 
-### 2. Architecture & modularity — 3.5
-`@eq/schemas` → `@eq/validation` → `@eq/intake` / `@eq/ai` / UIs is coherent.
-Drag: dual schema trees, `sql/` as staging vs apply pipe, Deno edge functions
-outside the pnpm matrix.
-
-### 3. Schema / API contract discipline — 4.0
-Draft 2020-12 schemas, Ajv lint, `ci:drift`, `check-schema-sync.mjs` — serious.
-Still two hand-authored sources of truth for overlapping entities.
-
-### 4. Testing — 3.5
-~63 Vitest files, messy fixtures, sample harness, gated Anthropic integration
-tests. Coverage optional on validation only; edge functions largely untested
-in CI.
-
-### 5. CI/CD & quality gates — 3.0
-`.github/workflows/ci.yml` does the spine work. Missing: ESLint/Biome,
-Prettier/format check, Dependabot/Renovate, CodeQL or equivalent, coverage
-threshold.
-
-### 6. Documentation & onboarding — 4.5
-Cold-start briefing, env template, SQL ownership, continuation prompts.
-Planning archaeology at root slows new humans.
-
-### 7. Observability & operational safety — 3.5
-`CLAUDE.md` DML-only rules, RLS scripts, rate limits, audit SQL,
-quality-guardian. Production error tracking / product analytics not wired as
-a first-class gate in this repo.
-
-### 8. Security & secrets hygiene — 3.5
-Defensive `.gitignore` (incl. customer exports), `.env.example`, SECDEF
-tenant guards, pnpm overrides. No Dependabot/CodeQL/secret-scan workflow.
-
-### 9. Developer experience — 3.5
-One-command install + codegen, Vite playgrounds. Friction: root npm + pnpm
-workspace, dual schemas, no lint/format pre-commit story.
-
-### 10. Continuous improvement culture — 4.5
-Silent-drop rule, steward DDL incident → process, dry-runs, numbered prompts
-(`05-continue-improve-intake`). Decisions live in product docs, not a formal
-`docs/decisions/` ADR tree.
+Score move rules applied: dim 5 +1.0 (first lint CI gate), dim 9 +0.5 (DX lint command; format not gated → not a full +1.0).
 
 ---
 
-## Highest-leverage lifts (expected point gain)
+## Dimension detail (post-L1)
+
+### 5. CI/CD & quality gates — 4.0
+Build / typecheck / test / drift / sync / **lint**. Still missing: format
+check, Dependabot/Renovate, CodeQL or audit gate, coverage threshold.
+
+### 9. Developer experience — 4.0
+`pnpm lint` documented in README. Format auto-fix available via
+`pnpm lint:fix` but not required. Dual package managers + dual schemas remain.
+
+---
+
+## Highest-leverage lifts remaining
 
 | Priority | Gap | Target dimension | Est. gain |
 |---|---|---|---:|
-| 1 | ESLint (+ format) as CI gate | 5, 9 | +1.5 to +2.0 |
+| 1 | ~~ESLint/Biome as CI gate~~ **done (lint)** | 5, 9 | — |
+| 1b | Biome **format** as CI ratchet | 5, 9 | +0.5 |
 | 2 | One schema source of truth (or generate one tree) | 2, 3, 9 | +1.0 to +1.5 |
 | 3 | Coverage thresholds on hot packages in CI | 4, 5 | +0.5 to +1.0 |
 | 4 | Dependabot/Renovate + CodeQL (or npm audit gate) | 5, 8 | +0.5 to +1.0 |
@@ -100,8 +80,7 @@ Silent-drop rule, steward DDL incident → process, dry-runs, numbered prompts
 | 6 | Wire designed audit/health to real telemetry | 7 | +0.5 |
 | 7 | Thin ADR index for locked decisions | 10, 6 | +0.5 |
 
-Hitting 1–4 cleanly moves the repo into the **42–45** band without
-rewriting the product.
+Path to **42–45**: L2 + L3 + L4 (or format ratchet + L3 + L4).
 
 ---
 
@@ -112,6 +91,7 @@ rewriting the product.
 - Schema lint + codegen drift + dual-tree sync gates
 - Live-plane steward hard rules after a real incident
 - Session prompts that name person/moment before scope
+- **Biome lint as a failing CI gate** (as of this update)
 
 Any “raise the score” session must keep those — industry points for
 tooling must not buy SaaS-theatre docs or silent-drop regressions.

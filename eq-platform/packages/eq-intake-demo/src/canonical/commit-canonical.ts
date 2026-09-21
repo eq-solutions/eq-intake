@@ -1035,7 +1035,7 @@ async function commitOneEntity(args: CommitOneEntityArgs): Promise<EntityCommitR
 
   // validate() against the canonical schema. We turn off allowNonCurrentSchema
   // because we just wrote the schema to the DB; the schema we have IS current.
-  let validationResult;
+  let validationResult: Awaited<ReturnType<typeof validate>>;
   try {
     validationResult = await validate({
       schema: args.schema as unknown as Parameters<typeof validate>[0]["schema"],

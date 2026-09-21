@@ -64,6 +64,7 @@ want the product why, read the conduit doc.
 cd eq-platform
 pnpm install                # codegen fires automatically via prepare hook
 pnpm -r build               # all packages
+pnpm lint                   # Biome lint gate (packages/*)
 pnpm -r test                # unit + sample-fixture validation tests
 pnpm schemas:lint           # validate every schema against draft 2020-12
 ```

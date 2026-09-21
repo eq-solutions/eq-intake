@@ -1,7 +1,7 @@
 # Raise industry benchmark — EQ Intake
 
 **Use this prompt when:** the goal is to raise
-[`BENCHMARK-2026-09-21.md`](../BENCHMARK-2026-09-21.md) from **38/50** toward
+[`BENCHMARK-2026-09-21.md`](../BENCHMARK-2026-09-21.md) from **39.5/50** toward
 **45/50** (industry-leading for a mid-size TypeScript product org).
 
 **Not for:** inventing new product doors, unparking Capture/OCR, live-plane
@@ -9,7 +9,7 @@ DDL, or rewriting the conduit frame. Product improvements belong in
 `prompts/05-continue-improve-intake.md`. This prompt is **engineering-standard
 lifts** that protect the conduit.
 
-**Authored:** 2026-09-21 · baseline 38/50.
+**Authored:** 2026-09-21 · baseline was 38/50; **L1 (Biome lint CI) landed → 39.5/50**.
 
 ---
 
@@ -66,10 +66,9 @@ A session succeeds only if **all** hold:
 Pri   Lift                                              Dims     Est. pts   Risk
 ────  ────────────────────────────────────────────────  ───────  ───────── ────
 ★★★   L1. ESLint (+ format) as CI gate                  5, 9     +1.5–2.0   ★★
-         Biome OR ESLint+Prettier — pick ONE toolchain.
-         Start warn-friendly or scoped to packages/*,
-         then ratchet. Must run in ci.yml.
-         Do NOT bikeshed rules for a full session.
+         DONE 2026-09-21: Biome lint in CI (39.5/50).
+         Remaining ratchet: enable format check in CI
+         once `biome check` is clean (or scoped).
 
 ★★★   L2. Schema single-source plan → first cut         2, 3, 9  +1.0–1.5   ★★★
          Options (ask Royce):
@@ -195,15 +194,15 @@ L5  At least one edge-function test job green on main path.
 
 ## 8. Asking script (first message to Royce)
 
-> Baseline is **38/50** (`BENCHMARK-2026-09-21.md`). Biggest lifts vs a
-> mid-size TS org:
-> **L1** ESLint/format in CI (~+2),
+> Baseline is **39.5/50** (`BENCHMARK-2026-09-21.md`) after L1 Biome lint.
+> Next biggest lifts:
+> **L1b** format ratchet (~+0.5),
 > **L2** schema single-source first cut (~+1.5),
 > **L3** coverage floors on validation/intake (~+1),
 > **L4** Dependabot + audit/CodeQL (~+1),
 > **L5** edge-function tests (~+1).
-> I recommend L1 this session (fastest honest CI muscle) unless schema drift
-> is hurting you this week — then L2. Which lift?
+> I recommend L2 or L3 this session unless format pain is biting — then L1b.
+> Which lift?
 
 Wait for the pick.
 
