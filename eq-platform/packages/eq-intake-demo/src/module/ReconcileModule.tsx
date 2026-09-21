@@ -86,7 +86,7 @@ export function ReconcileModule({ supabase, tenantId, createdBy, initialSlot, on
     if (!initialSlot) return;
     let cancelled = false;
     (async () => {
-      setStep({ tag: "loading", label: `Fetching ${entityLabel(initialSlot.entity)} from canonical…` });
+      setStep({ tag: "loading", label: `Fetching ${entityLabel(initialSlot.entity)} from EQ…` });
       let canonicalRows: Record<string, unknown>[] = [];
       if (supabase) {
         try {
@@ -132,7 +132,7 @@ export function ReconcileModule({ supabase, tenantId, createdBy, initialSlot, on
         const classified = await classifySheet({ schemas: ROLE_REGISTRY, sheet });
         const entity = classified.entity;
 
-        setStep({ tag: "loading", label: `Fetching ${entityLabel(entity)} from canonical…` });
+        setStep({ tag: "loading", label: `Fetching ${entityLabel(entity)} from EQ…` });
 
         let canonicalRows: Record<string, unknown>[] = [];
         if (supabase) {
@@ -248,7 +248,7 @@ export function ReconcileModule({ supabase, tenantId, createdBy, initialSlot, on
     <section className="eq-reconcile">
       {!initialSlot && (
         <>
-          <h2 className="eq-reconcile__title">Reconcile against canonical</h2>
+          <h2 className="eq-reconcile__title">Reconcile against what's in EQ</h2>
           <p className="eq-reconcile__subtitle">
             Drop a file to see what's new, what conflicts with what's already in EQ,
             and what already matches. Resolve conflicts before committing.
@@ -293,7 +293,7 @@ export function ReconcileModule({ supabase, tenantId, createdBy, initialSlot, on
         <div className="eq-spinner">
           <span className="eq-spinner__dot" />
           <span className="eq-spinner__text">
-            <span>Committing to canonical…</span>
+            <span>Saving into EQ…</span>
           </span>
         </div>
       )}
@@ -305,7 +305,7 @@ export function ReconcileModule({ supabase, tenantId, createdBy, initialSlot, on
             <strong>Done.</strong>{" "}
             {step.added > 0 && `${step.added} new row${step.added === 1 ? "" : "s"} added.`}{" "}
             {step.updated > 0 && `${step.updated} row${step.updated === 1 ? "" : "s"} updated.`}
-            {step.added === 0 && step.updated === 0 && "Nothing to commit — all resolved as keep-canonical or skipped."}
+            {step.added === 0 && step.updated === 0 && "Nothing to commit — all resolved as keep-what's-in-EQ or skipped."}
             {step.avgConfidence !== undefined && (
               <span
                 className="eq-reconcile__confidence-note"
@@ -358,7 +358,7 @@ function ReconcileDropZone({ onFiles }: { onFiles: (f: File[]) => void }): JSX.E
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.currentTarget.click(); }}
     >
       <p className="eq-dropzone__title">Drop a file here, or click to pick</p>
-      <p className="eq-dropzone__hint">CSV or XLSX — we'll detect the entity and compare against canonical</p>
+      <p className="eq-dropzone__hint">CSV or XLSX — we'll detect the entity and compare against what's already in EQ</p>
     </div>
   );
 }
@@ -425,7 +425,7 @@ function ReconcileReview({
         )}
         {result.onlyInCanonical.length > 0 && (
           <span className="eq-reconcile__badge eq-reconcile__badge--canonical">
-            {result.onlyInCanonical.length} canonical-only (untouched)
+            {result.onlyInCanonical.length} already in EQ (untouched)
           </span>
         )}
         <span className="eq-reconcile__match-key">
@@ -439,7 +439,7 @@ function ReconcileReview({
           <div className="eq-reconcile__section-header">
             <h3>Conflicts</h3>
             <span className="eq-reconcile__section-hint">
-              These rows exist in canonical but differ on some fields. Choose which version to keep.
+              These rows are already in EQ but differ on some fields. Choose which version to keep.
             </span>
           </div>
 
@@ -450,7 +450,7 @@ function ReconcileReview({
                 Use source
               </button>
               <button type="button" onClick={() => onResolveAll("keep-canonical")}>
-                Keep canonical
+                Keep what's in EQ
               </button>
               <button type="button" onClick={() => onResolveAll("skip")}>
                 Skip all
@@ -480,7 +480,7 @@ function ReconcileReview({
           <p>
             {result.onlyInSource.length} row{result.onlyInSource.length === 1 ? "" : "s"} in
             your file {result.onlyInSource.length === 1 ? "has" : "have"} no match in
-            canonical and will be added on commit.
+            EQ and will be added on commit.
           </p>
           <NewRowList rows={result.onlyInSource} matchKey={result.matchKey} scores={scores} />
         </div>
@@ -489,10 +489,10 @@ function ReconcileReview({
       {/* Canonical-only — info count */}
       {result.onlyInCanonical.length > 0 && (
         <div className="eq-reconcile__section eq-reconcile__section--canonical">
-          <h3>Canonical-only — not in your file</h3>
+          <h3>Already in EQ — not in your file</h3>
           <p>
             {result.onlyInCanonical.length} row{result.onlyInCanonical.length === 1 ? "" : "s"} in
-            canonical {result.onlyInCanonical.length === 1 ? "was" : "were"} not found in your
+            EQ {result.onlyInCanonical.length === 1 ? "was" : "were"} not found in your
             file. These rows will not be touched.
           </p>
         </div>
@@ -503,7 +503,7 @@ function ReconcileReview({
           <h3>Matched — already in sync</h3>
           <p>
             {result.matched.length} row{result.matched.length === 1 ? "" : "s"} in your file
-            match canonical exactly. Nothing to do.
+            match EQ exactly. Nothing to do.
           </p>
         </div>
       )}
@@ -592,7 +592,7 @@ function ConflictRow({
             aria-pressed={resolution === "keep-canonical"}
             onClick={() => onSetResolution("keep-canonical")}
           >
-            Keep canonical
+            Keep what's in EQ
           </button>
           {/* No shared key on a fuzzy row — "use source" has nothing to
               upsert against and would silently insert a duplicate instead

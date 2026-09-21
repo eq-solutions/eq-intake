@@ -244,35 +244,31 @@ module beyond a one-line registration.
 **The current state is fragmented** — multiple Supabase projects, no
 single SKS canonical. The path forward is to consolidate.
 
-## Current implementation status (2026-05-18)
+## Current implementation status (2026-05-18; layout note 2026-09-21)
 
-What's BUILT and working:
-- `@eq/schemas` — 12 canonical JSON Schemas including new `customer` +
-  `contact`, with full `x-eq-source-aliases` for SimPRO/MYOB/Xero
+What's BUILT and working (counts decay — trust package source + `git log`):
+- `@eq/schemas` — canonical JSON Schemas with `x-eq-source-aliases` for
+  SimPRO/MYOB/Xero and related sources (see README schema-ownership note)
 - `@eq/schemas` SQL codegen — emits `CREATE TABLE` per entity with FKs,
   RLS-enabled, indexes. Run via `pnpm --filter @eq/schemas generate:sql`.
 - Migration sequencer (`pnpm db:apply` from repo root) — produces a
-  single 154 KB SQL file at `eq-platform/.generated/all-migrations.sql`
-  ready to paste into the Supabase SQL editor
-- `@eq/shell` — Vite + React + Router app with Supabase Auth wrapper,
-  lazy-loaded modules, per-tenant config (`VITE_TENANT` /
-  `VITE_ENABLED_MODULES` / palette), SKS palette pre-wired
+  single SQL file at `eq-platform/.generated/all-migrations.sql` for
+  hand-off to the owning migration pipe (eq-shell), not freestyle live DDL
+- **eq-shell** (separate repo) — Vite + React + Router host with Supabase
+  Auth, lazy-loaded modules, per-tenant config. Removed from this tree in
+  #51; do not look for `apps/eq-shell/` here.
 - `@eq/intake-demo` — Intake module exposing `IntakeModule` for mount
   in the shell, plus standalone dev playground at `localhost:5174`
-- Tests: 293 passing + 1 skipped across all packages
-- `apps/eq-shell/DEPLOY.md` — step-by-step deployment guide
 
 What's READY to wire (waiting on Royce — Option C, two-Supabase plan):
 - Provision `eq-demo-canonical` Supabase project (Sydney region) — proving
   ground for the shell + commit RPC + intake flow. ~5 min.
-- Provision `sks-canonical-eq` Supabase project (Sydney region) — live
-  SKS canonical, fed by the same migration SQL once demo is proven. ~5 min.
-- Drop demo credentials in `.env.local` of the eq-shell app for local dev.
-  (Note 2026-06-30: the in-repo `apps/eq-shell` host was removed in #51 — the
-  shell now lives only in the standalone `eq-shell` repo.) SKS credentials go
-  into SKS Netlify env vars only.
-- Paste `eq-platform/.generated/all-migrations.sql` into BOTH SQL editors
-  → Run — ~1 min each.
+- Provision / operate `sks-canonical` (`ehow…`) — live SKS tenant plane
+  (older plan text said `sks-canonical-eq`; that name is retired).
+- Drop demo credentials in `.env.local` of the **eq-shell** app for local
+  dev. SKS credentials go into SKS Netlify env vars only.
+- Hand generated SQL to eq-shell's tenant-migrations lineage (see
+  `CLAUDE.md` / `sql/README.md`) — do not hand-apply DDL on live planes.
 - Add first user via Supabase dashboard (one per project).
 
 What I'll do once demo credentials arrive (~30-45 min):

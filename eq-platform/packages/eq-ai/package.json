@@ -2,7 +2,7 @@
   "name": "@eq/ai",
   "version": "0.0.1",
   "private": true,
-  "description": "Vendor-agnostic AI provider for EQ. Currently ships AnthropicProvider; designed for swap-out to Gemini/local models. Fetch-based, no Anthropic SDK.",
+  "description": "Vendor-agnostic AI provider for EQ — learns each system's shape so humans don't hand-build the connection. Ships AnthropicProvider; swap-ready for Gemini/local. Fetch-based, no Anthropic SDK.",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

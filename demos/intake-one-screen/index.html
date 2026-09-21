@@ -530,7 +530,7 @@ function saveIntoEq(){
   const R=$('#result'); R.classList.remove('hidden'); R.classList.add('fade');
   R.innerHTML=`
     <div class="head"><span class="tick">✓</span> Saved ${n} ${noun} into EQ</div>
-    <div class="sub">Filed from ${CUR.name} into your canonical layer — trace any row in <a>Audit log</a>.</div>
+    <div class="sub">Filed from ${CUR.name} into EQ — every row in deserves a row out.</div>
     ${extra}
     ${flags.length?`<div class="flagline" id="flagline"><span>⚠</span> ${flags.length} need a quick look — all ${n} saved, these are just flagged &rarr;</div><div id="reviewslot"></div>`:''}
     <div class="actions" style="margin-top:22px">

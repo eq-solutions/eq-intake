@@ -2,7 +2,7 @@
   "name": "eq-platform",
   "version": "0.0.1",
   "private": true,
-  "description": "EQ — canonical spine for trade-subbie data. Phase 1 monorepo root.",
+  "description": "EQ — AI-shaped bridge between trade systems (parse / validate / reshape). Packages monorepo; shell UI lives in eq-shell.",
   "type": "module",
   "engines": {
     "node": ">=20.11.0",

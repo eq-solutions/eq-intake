@@ -29,6 +29,8 @@ Every other doc in this repo should be readable through that lens.
    answers to this doc.
 5. **[`EQ-INTAKE-ARCHITECTURE.md`](EQ-INTAKE-ARCHITECTURE.md)** —
    Technical shape: canonical layer in the middle, doors in, doors out.
+6. **[`CLAUDE.md`](CLAUDE.md)** — Live-plane steward rules (DML-only;
+   no DDL; no hand-writes to `_eq_migrations`).
 
 Reference docs, read on demand:
 
@@ -40,29 +42,50 @@ Reference docs, read on demand:
 - **[`PHASE-2-3-BACKLOG.md`](PHASE-2-3-BACKLOG.md)** — Deferred items
   parked for later. Treat as a graveyard, not a queue.
 
-Live planning docs (replace each other quarterly):
+Historical planning (archaeology — not the live queue):
 
-- **[`PLAN-2026-05-24.md`](PLAN-2026-05-24.md)** — Current 90-day plan.
+- **[`PLAN-2026-05-24.md`](PLAN-2026-05-24.md)** — May 2026 90-day plan
+  (superseded by `git log` + open PRs for "what's next").
 - **[`CONDUIT-AUDIT-2026-05-22.md`](CONDUIT-AUDIT-2026-05-22.md)** —
-  Findings the plan was built on. Critical silent-drops to fix, drift,
-  latent risks.
+  Findings that plan was built on.
 
 If you want to know what's running this week, read `git log`. If you
-want to know what's running this quarter, read the live plan.
+want the product why, read the conduit doc.
 
 ## Get it running
 
-```powershell
-cd C:\Projects\eq-intake\eq-platform
+```bash
+cd eq-platform
 pnpm install                # codegen fires automatically via prepare hook
 pnpm -r build               # all packages
 pnpm -r test                # unit + sample-fixture validation tests
 pnpm schemas:lint           # validate every schema against draft 2020-12
 ```
 
-The `.env` lives at `eq-platform/.env` (gitignored). See `.env.example`
-for the shape. Optional integration tests against the real Anthropic API
-are gated on `ANTHROPIC_API_KEY` and cost ~half a cent per run.
+Copy [`eq-platform/.env.example`](eq-platform/.env.example) to
+`eq-platform/.env` (gitignored) and fill in only what you need.
+Optional integration tests against the real Anthropic API are gated on
+`ANTHROPIC_API_KEY` and cost ~half a cent per run.
+
+Playgrounds (from `eq-platform/`):
+
+```bash
+pnpm --filter @eq/intake-demo dev   # localhost:5174 — drop a sheet, map, validate
+pnpm --filter @eq/format-ui dev    # reshape / validate CSV with AI mapping
+```
+
+## Schema ownership (two trees, one sync gate)
+
+Neither tree is generated from the other. Both are hand-authored:
+
+| Tree | Role |
+|---|---|
+| `schemas/` | Root copy — intake/service-heavy entities + `scripts/gen-types.mjs` |
+| `eq-platform/packages/eq-schemas/src/schemas/` | Runtime `@eq/schemas` — what packages import |
+
+Shared filenames must match structurally. CI runs
+`node scripts/check-schema-sync.mjs` (carve-outs only via
+`scripts/schema-sync-exceptions.json`).
 
 ## Standing rules
 
@@ -89,25 +112,23 @@ are gated on `ANTHROPIC_API_KEY` and cost ~half a cent per run.
 
 | Path | Purpose |
 |---|---|
-| `schemas/` | Canonical JSON Schemas (source of truth, root copy) |
+| `schemas/` | Root canonical JSON Schemas (see Schema ownership above) |
 | `types/` | TS types generated from `schemas/` via `scripts/gen-types.mjs` |
 | `samples/` | Real and synthetic fixtures used by the sample-validation harness |
 | `test-fixtures/` | Synthetic edge-case fixtures for the coercion + validation tests |
-| `sql/` | Canonical migrations (001–035; applied to the live `sks-canonical`) |
-| `edge-functions/` | Supabase Edge Functions (`api-intake`, `approve-worker-assignment`) |
+| `sql/` | Tenant-plane SQL **staging** (numbered from the live ledger; hand to eq-shell's tenant-migrations pipe — not freestyle DDL on live) |
+| `edge-functions/` | Supabase Edge Functions (`api-intake`, `approve-worker-assignment`, `eq-ai-assist`, `parse-maximo-pdf-wo`, `parse-rcd-switchboard-schedule`) |
+| `supabase/functions/quality-guardian/` | Nightly data-quality Edge Function |
 | `prompts/` | AI prompt templates (column mapping, vision extraction, continuation playbooks) |
 | `demos/` | Standalone demos — engine smoke tests + the Intake one-screen prototype |
-| `eq-platform/` | pnpm workspace — apps (`eq-shell`), packages, scripts |
+| `eq-platform/` | pnpm workspace — packages only (`@eq/schemas`, `@eq/validation`, `@eq/intake`, `@eq/ai`, `@eq/confirm-ui`, `@eq/intake-demo`, `@eq/format-ui`). The shell UI lives in the separate **eq-shell** repo. |
 | `_archive/` | Superseded planning + status docs, kept for archaeology only |
-
-The `eq-platform` workspace ships seven packages (`@eq/schemas`,
-`@eq/validation`, `@eq/intake`, `@eq/intake-demo`, `@eq/format-ui`,
-`@eq/ai`, `@eq/confirm-ui`) plus the `eq-shell` app. See each package's
-own README for current state — those decay slower than this one would
-if it tried to describe them.
 
 ## Changelog
 
+- **v5 (2026-09-21):** Onboarding polish — accurate layout (no in-repo
+  eq-shell), schema-ownership note, `.env.example`, sql staging language,
+  historical plan labels.
 - **v4 (2026-05-24):** Mission revision. EQ is built for Royce's SKS NSW
   operations, not for external beta testers. PLAN-2026-05-22 superseded by
   PLAN-2026-05-24. Updated live planning pointer.
