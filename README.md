@@ -41,6 +41,9 @@ Reference docs, read on demand:
   decision for migrating Cards onto canonical when the trigger fires.
 - **[`PHASE-2-3-BACKLOG.md`](PHASE-2-3-BACKLOG.md)** — Deferred items
   parked for later. Treat as a graveyard, not a queue.
+- **[`prompts/05-continue-improve-intake.md`](prompts/05-continue-improve-intake.md)**
+  — Session prompt to keep improving Intake (trust, depth, no silent
+  drops). Paste it to start the next intake session.
 
 Historical planning (archaeology — not the live queue):
 
