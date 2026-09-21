@@ -54,11 +54,18 @@ export function QualifyModule({ supabase, tenantId, ai }: QualifyModuleProps): J
 
   useEffect(() => {
     driver.configure({
-      tenantId: tenantId ?? "00000000-0000-4000-8000-000000000001",
+      // Not read anywhere in qualify-store — only the commit closure's own
+      // `tenantId` (checked below) is load-bearing for the actual write.
+      // Required by QualifyFlowConfig's type, so an empty string stands in
+      // rather than a fixture UUID that could be mistaken for a real one.
+      tenantId: tenantId ?? "",
       ai: ai ?? undefined,
       commit: async (payload) => {
         if (!supabase) {
           throw new Error("EQ isn't connected yet — ask whoever set this up to fill in the connection details.");
+        }
+        if (!tenantId) {
+          throw new Error("Missing tenant — can't save.");
         }
         const { data, error: rpcError } = await supabase.rpc("eq_intake_commit_qualification", {
           p_tenant_id: tenantId,
@@ -101,6 +108,12 @@ export function QualifyModule({ supabase, tenantId, ai }: QualifyModuleProps): J
         <div className="eq-intake-info-strip">
           EQ isn't connected yet — ask whoever set this up to fill in the connection details.
           Saving stays inactive until then.
+        </div>
+      )}
+
+      {supabase && !tenantId && (
+        <div className="eq-intake-info-strip">
+          Missing tenant — saving stays inactive until this is fixed.
         </div>
       )}
 

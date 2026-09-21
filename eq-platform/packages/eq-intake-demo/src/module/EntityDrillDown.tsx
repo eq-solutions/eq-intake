@@ -82,8 +82,6 @@ type Row = Record<string, unknown>;
 type DrillRow = Row & { _dupeField?: string; _dupeKey?: string };
 type FilterMode = "all" | "gaps" | "duplicates" | "tidy";
 
-const DEFAULT_TENANT_ID = "00000000-0000-4000-8000-000000000001";
-
 // Every entity reads from the shared field-importance rulebook (see
 // @eq/intake's field-importance.ts) so this list can't quietly disagree
 // with the Overview score's gap list again — that drift (this list once
@@ -339,11 +337,6 @@ export function EntityDrillDown({
   const displayColumns = DISPLAY_COLUMNS[entity] ?? [];
   const dupeKeys = DUPE_KEYS[entity] ?? [];
   const tidyEntity = ENTITY_TO_TIDY[entity] ?? null;
-  const resolvedTenantId = tenantId ?? DEFAULT_TENANT_ID;
-  if (!tenantId) {
-    // eslint-disable-next-line no-console
-    console.warn("[EntityDrillDown] tenantId prop not provided — tidy-pass and fix-commits will use the fixture tenant.");
-  }
 
   // ── Fetch canonical rows ────────────────────────────────────────────────
   useEffect(() => {
@@ -378,7 +371,7 @@ export function EntityDrillDown({
 
   // ── Tidy pass ──────────────────────────────────────────────────────────
   useEffect(() => {
-    if (filterMode !== "tidy" || !supabase || !tidyEntity) return;
+    if (filterMode !== "tidy" || !supabase || !tidyEntity || !tenantId) return;
 
     let cancelled = false;
     setTidyLoading(true);
@@ -391,7 +384,7 @@ export function EntityDrillDown({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     runTidyPass({
       supabase: supabase as any,
-      tenantId: resolvedTenantId,
+      tenantId,
       entities: [tidyEntity],
       onProgress: (msg) => {
         if (!cancelled) setTidyProgress(msg);
@@ -416,7 +409,7 @@ export function EntityDrillDown({
     return () => {
       cancelled = true;
     };
-  }, [filterMode, supabase, tidyEntity, resolvedTenantId]);
+  }, [filterMode, supabase, tidyEntity, tenantId]);
 
   // Reset tidy state when leaving tidy mode
   useEffect(() => {
@@ -758,6 +751,11 @@ export function EntityDrillDown({
       return;
     }
 
+    if (!tenantId) {
+      setEditSaveError("Missing tenant — can't save this change.");
+      return;
+    }
+
     const tidyEntity = ENTITY_TO_TIDY[entity];
     if (!tidyEntity || !targetRow) return;
 
@@ -778,7 +776,7 @@ export function EntityDrillDown({
     setEditSaveError(null);
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await commitTidyFixes({ supabase: supabase as any, tenantId: resolvedTenantId, fixes: [fix] });
+      const result = await commitTidyFixes({ supabase: supabase as any, tenantId, fixes: [fix] });
       if (result.applied > 0) {
         setRows((prev) => prev.map((r) => (rowKey(entity, r) === rowId ? { ...r, [field]: newValue } : r)));
         if (tidyReport) {
@@ -794,7 +792,7 @@ export function EntityDrillDown({
     } finally {
       setEditSaving(false);
     }
-  }, [editState, editDraft, entity, rows, supabase, tidyReport, resolvedTenantId, canEditCanonical]);
+  }, [editState, editDraft, entity, rows, supabase, tidyReport, tenantId, canEditCanonical]);
 
   const cancelEdit = useCallback(() => {
     setEditState(null);
@@ -805,6 +803,11 @@ export function EntityDrillDown({
   // ── Tidy fix commit ────────────────────────────────────────────────────
   const handleApplyFixes = useCallback(async () => {
     if (!supabase || !tidyReport || selectedFixKeys.size === 0 || committing) return;
+
+    if (!tenantId) {
+      setTidyError("Missing tenant — can't apply fixes.");
+      return;
+    }
 
     const fixes = tidyReport.auto_fixes.filter((f) =>
       selectedFixKeys.has(`${f.row_id}:${f.field}`),
@@ -817,7 +820,7 @@ export function EntityDrillDown({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await commitTidyFixes({
         supabase: supabase as any,
-        tenantId: resolvedTenantId,
+        tenantId,
         fixes,
       });
       setCommitResult(result);
@@ -831,7 +834,7 @@ export function EntityDrillDown({
     } finally {
       setCommitting(false);
     }
-  }, [supabase, tidyReport, selectedFixKeys, committing, resolvedTenantId]);
+  }, [supabase, tidyReport, selectedFixKeys, committing, tenantId]);
 
   const handleBulkDraftChange = useCallback((rowId: string, value: string) => {
     setBulkFillDrafts((prev) => ({ ...prev, [rowId]: value }));
@@ -848,6 +851,11 @@ export function EntityDrillDown({
   // operator typed a value into, instead of a save per record. ────────────
   const handleBulkSave = useCallback(async () => {
     if (!supabase || !tidyReport || !bulkFillField || !canEditCanonical || bulkSaving) return;
+
+    if (!tenantId) {
+      setBulkError("Missing tenant — can't save.");
+      return;
+    }
 
     const tidyEntity = ENTITY_TO_TIDY[entity];
     if (!tidyEntity) return;
@@ -877,7 +885,7 @@ export function EntityDrillDown({
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await commitTidyFixes({ supabase: supabase as any, tenantId: resolvedTenantId, fixes });
+      const result = await commitTidyFixes({ supabase: supabase as any, tenantId, fixes });
       setBulkResult(result);
       if (result.applied > 0) {
         setBulkFillDrafts({});
@@ -889,7 +897,7 @@ export function EntityDrillDown({
     } finally {
       setBulkSaving(false);
     }
-  }, [supabase, tidyReport, bulkFillField, bulkFillDrafts, canEditCanonical, bulkSaving, entity, rows, resolvedTenantId]);
+  }, [supabase, tidyReport, bulkFillField, bulkFillDrafts, canEditCanonical, bulkSaving, entity, rows, tenantId]);
 
   // ── Gap suggestions ───────────────────────────────────────────────────
   const callEdgeFn = useMemo<EdgeFnCaller | null>(() => {
@@ -944,6 +952,11 @@ export function EntityDrillDown({
         return;
       }
 
+      if (!tenantId) {
+        setSuggestError("Missing tenant — can't save this change.");
+        return;
+      }
+
       const tidyEntity = ENTITY_TO_TIDY[entity];
       if (!tidyEntity || !targetRow) return;
 
@@ -963,7 +976,7 @@ export function EntityDrillDown({
       setSuggestError(null);
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = await commitTidyFixes({ supabase: supabase as any, tenantId: resolvedTenantId, fixes: [fix] });
+        const result = await commitTidyFixes({ supabase: supabase as any, tenantId, fixes: [fix] });
         if (result.applied > 0) {
           setRows((prev) => prev.map((r) => (rowKey(entity, r) === suggestRowId ? { ...r, [field]: value } : r)));
           if (tidyReport) {
@@ -978,7 +991,7 @@ export function EntityDrillDown({
         setSuggestError(err instanceof Error ? err.message : String(err));
       }
     },
-    [suggestRowId, suggestRowLabel, entity, rows, supabase, tidyReport, resolvedTenantId],
+    [suggestRowId, suggestRowLabel, entity, rows, supabase, tidyReport, tenantId],
   );
 
   // ── Column definitions ────────────────────────────────────────────────

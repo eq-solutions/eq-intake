@@ -41,8 +41,6 @@ export interface ReconcileModuleProps {
   onClose?: () => void;
 }
 
-const DEFAULT_TENANT_ID = "00000000-0000-4000-8000-000000000001";
-
 // ---------------------------------------------------------------------------
 // Top-level component
 // ---------------------------------------------------------------------------
@@ -190,6 +188,11 @@ export function ReconcileModule({ supabase, tenantId, createdBy, initialSlot, on
   const handleCommit = useCallback(async () => {
     if (step.tag !== "ready" || !supabase) return;
 
+    if (!tenantId) {
+      setStep({ tag: "error", message: "Missing tenant — can't commit these rows." });
+      return;
+    }
+
     const { result, entity, sheet, scores } = step;
 
     // Build rows to commit:
@@ -233,7 +236,7 @@ export function ReconcileModule({ supabase, tenantId, createdBy, initialSlot, on
       await commitBundleToCanonical({
         supabase,
         bundle: bundle as Parameters<typeof commitBundleToCanonical>[0]["bundle"],
-        tenantId: tenantId ?? DEFAULT_TENANT_ID,
+        tenantId,
         createdBy,
         sourceFilename: sheet.sheetName ?? "reconcile",
       });

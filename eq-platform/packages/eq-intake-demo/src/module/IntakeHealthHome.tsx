@@ -92,8 +92,6 @@ type RowStatus = "ok" | "warn" | "err" | "info" | "neutral";
 // Score computation
 // ---------------------------------------------------------------------------
 
-const DEFAULT_TENANT_ID = "00000000-0000-4000-8000-000000000001";
-
 // Below this many rows, a 100% (or 0%) score is a coin flip, not a trend —
 // flag it so a nearly-empty entity doesn't read as confidently as a big one.
 const LOW_SAMPLE_THRESHOLD = 5;
@@ -639,13 +637,6 @@ export function IntakeHealthHome({
   onBringDataIn,
   refreshSignal,
 }: IntakeHealthHomeProps): JSX.Element {
-  const resolvedTenantId = tenantId ?? DEFAULT_TENANT_ID;
-
-  if (!tenantId) {
-    // eslint-disable-next-line no-console
-    console.warn("[IntakeHealthHome] tenantId prop not provided — health queries will use the fixture tenant.");
-  }
-
   const [scores,     setScores]     = useState<HealthScore[] | null>(null);
   const [licences,   setLicences]   = useState<LicenceExpiryAlertSummary | null>(null);
   const [orphans,    setOrphans]    = useState<OrphanSummary | null>(null);
@@ -663,7 +654,7 @@ export function IntakeHealthHome({
   const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase || !tenantId) return;
 
     let cancelled = false;
 
@@ -680,9 +671,9 @@ export function IntakeHealthHome({
 
       Promise.allSettled([
         computeHealthScores(sb, fieldImportanceOverrides),
-        runLicenceExpiryCheck(sb, resolvedTenantId),
+        runLicenceExpiryCheck(sb, tenantId),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        runOrphanCheck({ supabase: supabase as any, tenantId: resolvedTenantId }),
+        runOrphanCheck({ supabase: supabase as any, tenantId }),
         computeComplianceMetrics(sb),
       ]).then(([healthResult, licenceResult, orphanResult, complianceResult]) => {
         if (cancelled) return;
@@ -722,12 +713,20 @@ export function IntakeHealthHome({
     });
 
     return () => { cancelled = true; };
-  }, [supabase, resolvedTenantId, refreshTick, refreshSignal, fieldImportanceOverrides]);
+  }, [supabase, tenantId, refreshTick, refreshSignal, fieldImportanceOverrides]);
 
   if (!supabase) {
     return (
       <section className="eq-health-home">
         <div className="eq-health-notice">Connect EQ to see your data health</div>
+      </section>
+    );
+  }
+
+  if (!tenantId) {
+    return (
+      <section className="eq-health-home">
+        <div className="eq-health-notice">Missing tenant — can't show health data here.</div>
       </section>
     );
   }

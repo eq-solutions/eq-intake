@@ -151,7 +151,6 @@ export interface IntakeModuleProps {
   qualifyAi?: import("@eq/ai").AIProvider | null;
 }
 
-const DEFAULT_TENANT_ID = "00000000-0000-4000-8000-000000000001";
 const ROUTE_LOG_KEY = "eq-intake:routes";
 
 function defaultRouteLogger(
@@ -443,20 +442,26 @@ export function IntakeModule(props: IntakeModuleProps): JSX.Element {
               />
 
               {isCanonical ? (
-                <CommitView
-                  bundle={bundle}
-                  supabase={props.supabase}
-                  tenantId={props.tenantId ?? DEFAULT_TENANT_ID}
-                  createdBy={props.createdBy}
-                  stageCommit={props.stageCommit}
-                  onViewEntity={(entity) => {
-                    setDrillEntity(entity);
-                    setDrillFilters(null);
-                    setMode("health");
-                  }}
-                  onViewQueue={() => { setDrillEntity(null); setMode("queue"); }}
-                  onReset={() => { bundle.reset(); setReconcileSlot(null); }}
-                />
+                props.tenantId ? (
+                  <CommitView
+                    bundle={bundle}
+                    supabase={props.supabase}
+                    tenantId={props.tenantId}
+                    createdBy={props.createdBy}
+                    stageCommit={props.stageCommit}
+                    onViewEntity={(entity) => {
+                      setDrillEntity(entity);
+                      setDrillFilters(null);
+                      setMode("health");
+                    }}
+                    onViewQueue={() => { setDrillEntity(null); setMode("queue"); }}
+                    onReset={() => { bundle.reset(); setReconcileSlot(null); }}
+                  />
+                ) : (
+                  <div className="eq-intake-info-strip">
+                    Missing tenant — can't commit here until this is fixed.
+                  </div>
+                )
               ) : (
                 exportDest && (
                   <DownloadResultView
