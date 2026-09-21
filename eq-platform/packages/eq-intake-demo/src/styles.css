@@ -4082,6 +4082,15 @@ button.eq-primary:hover {
 .eq-drill__dupe-error { font-size: 11px; color: var(--eq-warn); }
 .eq-drill__usage-badge { display: inline-flex; align-items: center; padding: 2px 8px; background: var(--eq-paper); border: 1px solid var(--eq-line); color: var(--eq-muted); border-radius: 4px; font-size: 11px; font-weight: 500; }
 .eq-drill__usage-badge--has-data { background: var(--eq-sky); border-color: var(--eq-sky); color: white; }
+/* Duplicate group cards — non-sites duplicates view (card per group, replaces the flat table) */
+.eq-dupe-group-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.eq-dupe-group-card { border: 1px solid var(--eq-line); border-radius: 8px; padding: 12px 14px; background: white; }
+.eq-dupe-group-card__header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.eq-dupe-group-card__count { font-size: 12px; color: var(--eq-muted); }
+.eq-dupe-group-card__rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.eq-dupe-group-card__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 8px; border-radius: 6px; background: var(--eq-ice); flex-wrap: wrap; }
+.eq-dupe-group-card__row-text { font-size: 13px; color: var(--eq-ink); }
+.eq-dupe-group-card__footer { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--eq-line); }
 /* Inline edit controls (same as before) */
 .eq-drill__inline-edit { display: flex; gap: 4px; align-items: center; }
 .eq-drill__inline-input { border: 1px solid var(--eq-sky); border-radius: 4px; padding: 3px 6px; font-size: 13px; width: 140px; }

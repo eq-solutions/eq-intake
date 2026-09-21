@@ -82,6 +82,17 @@ type Row = Record<string, unknown>;
 type DrillRow = Row & { _dupeField?: string; _dupeKey?: string };
 type FilterMode = "all" | "gaps" | "duplicates" | "tidy";
 
+/** One duplicate group (same dupeField:dupeKey), for the card-per-group
+ * duplicates view — see DuplicateGroupCards below. */
+interface DuplicateGroup {
+  key: string;
+  dupeField: string;
+  dupeKey: string;
+  rows: DrillRow[];
+}
+
+const DEFAULT_TENANT_ID = "00000000-0000-4000-8000-000000000001";
+
 // Every entity reads from the shared field-importance rulebook (see
 // @eq/intake's field-importance.ts) so this list can't quietly disagree
 // with the Overview score's gap list again — that drift (this list once
@@ -651,18 +662,24 @@ export function EntityDrillDown({
     [supabase, archiveBusy, entity, canEditCanonical],
   );
 
-  // First row_id encountered per dupe group, in duplicateRows order — the
-  // dismiss action renders once per group (dismissing applies to the whole
-  // group, not one row), same "action on one row, hint on the rest" shape
-  // Sites' merge cell already uses.
-  const groupFirstRowId = useMemo<Map<string, string>>(() => {
-    const m = new Map<string, string>();
+  // Ordered groups of duplicateRows, keyed by "field:key" — the presentation
+  // unit for the non-sites duplicates view (one card per group, see
+  // DuplicateGroupCards below) instead of a flat row-per-record table.
+  const duplicateGroups = useMemo<DuplicateGroup[]>(() => {
+    const order: string[] = [];
+    const map = new Map<string, DuplicateGroup>();
     for (const row of duplicateRows) {
-      const key = `${row._dupeField}:${row._dupeKey}`;
-      if (!m.has(key)) m.set(key, rowKey(entity, row));
+      const dupeField = row._dupeField ?? "";
+      const dupeKey = row._dupeKey ?? "";
+      const key = `${dupeField}:${dupeKey}`;
+      if (!map.has(key)) {
+        map.set(key, { key, dupeField, dupeKey, rows: [] });
+        order.push(key);
+      }
+      map.get(key)!.rows.push(row);
     }
-    return m;
-  }, [duplicateRows, entity]);
+    return order.map((k) => map.get(k)!);
+  }, [duplicateRows]);
 
   const handleDismissDuplicate = useCallback(
     async (dupeField: string, dupeKey: string) => {
@@ -1189,68 +1206,6 @@ export function EntityDrillDown({
       });
     }
 
-    if (filterMode === "duplicates" && entity !== "sites" && canEditCanonical) {
-      cols.push({
-        key: "_dismiss",
-        header: "Not a duplicate",
-        sortable: false,
-        render: (row: DrillRow) => {
-          const groupKey = `${row._dupeField}:${row._dupeKey}`;
-          const rowId = rowKey(entity, row);
-          if (groupFirstRowId.get(groupKey) !== rowId) {
-            return <span className="eq-drill__dupe-hint">part of the group above</span>;
-          }
-          const busy = !!dismissBusy[groupKey];
-          const err = dismissError[groupKey];
-          return (
-            <span className="eq-drill__merge-cell">
-              <button
-                type="button"
-                className="eq-drill__suggest-btn"
-                disabled={busy}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleDismissDuplicate(row._dupeField ?? "", row._dupeKey ?? "");
-                }}
-              >
-                {busy ? "Dismissing…" : "Not a duplicate"}
-              </button>
-              {err && <span className="eq-drill__dupe-error">{err}</span>}
-            </span>
-          );
-        },
-      });
-    }
-
-    if (filterMode === "duplicates" && entity !== "sites" && isArchivableDuplicate(entity) && canEditCanonical) {
-      cols.push({
-        key: "_archive",
-        header: "Archive",
-        sortable: false,
-        render: (row: DrillRow) => {
-          const rowId = rowKey(entity, row);
-          const busy = !!archiveBusy[rowId];
-          const err = archiveError[rowId];
-          return (
-            <span className="eq-drill__merge-cell">
-              <button
-                type="button"
-                className="eq-drill__suggest-btn"
-                disabled={busy}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleArchiveDuplicate(rowId);
-                }}
-              >
-                {busy ? "Archiving…" : "Archive"}
-              </button>
-              {err && <span className="eq-drill__dupe-error">{err}</span>}
-            </span>
-          );
-        },
-      });
-    }
-
     if (filterMode === "gaps" && callEdgeFn) {
       cols.push({
         key: "_suggest",
@@ -1293,13 +1248,6 @@ export function EntityDrillDown({
     canMergeSites,
     canEditCanonical,
     handleFlagPair,
-    archiveBusy,
-    archiveError,
-    handleArchiveDuplicate,
-    groupFirstRowId,
-    dismissBusy,
-    dismissError,
-    handleDismissDuplicate,
     onBack,
   ]);
 
@@ -1497,6 +1445,21 @@ export function EntityDrillDown({
           bulkResult={bulkResult}
           bulkError={bulkError}
         />
+      ) : filterMode === "duplicates" && entity !== "sites" ? (
+        <DuplicateGroupCards
+          entity={entity}
+          groups={duplicateGroups}
+          displayColumns={displayColumns}
+          canEditCanonical={canEditCanonical}
+          archivable={isArchivableDuplicate(entity)}
+          archiveBusy={archiveBusy}
+          archiveError={archiveError}
+          onArchive={handleArchiveDuplicate}
+          dismissBusy={dismissBusy}
+          dismissError={dismissError}
+          onDismiss={handleDismissDuplicate}
+          emptyMessage={emptyMsg}
+        />
       ) : (
         <Table<DrillRow>
           columns={columns}
@@ -1529,6 +1492,112 @@ export function EntityDrillDown({
         />
       )}
     </div>
+  );
+}
+
+// ── DuplicateGroupCards ────────────────────────────────────────────────────
+// Card-per-group presentation for the non-sites duplicates view — replaces a
+// flat table that repeated "part of the group above" once per row and spread
+// each group's Archive/Not-a-duplicate actions across N separate rows. Sites
+// keeps its own Table-based survivor/merge flow (a different decision shape,
+// out of scope here).
+
+function dupeRowSummary(row: DrillRow, columns: string[]): string {
+  const parts = columns
+    .map((c) => row[c])
+    .filter((v): v is string | number => !isBlank(v))
+    .map((v) => String(v));
+  return parts.length > 0 ? parts.join(" · ") : "—";
+}
+
+interface DuplicateGroupCardsProps {
+  entity: string;
+  groups: DuplicateGroup[];
+  displayColumns: string[];
+  canEditCanonical?: boolean;
+  archivable: boolean;
+  archiveBusy: Record<string, boolean>;
+  archiveError: Record<string, string>;
+  onArchive: (rowId: string) => void;
+  dismissBusy: Record<string, boolean>;
+  dismissError: Record<string, string>;
+  onDismiss: (dupeField: string, dupeKey: string) => void;
+  emptyMessage: string;
+}
+
+function DuplicateGroupCards({
+  entity,
+  groups,
+  displayColumns,
+  canEditCanonical,
+  archivable,
+  archiveBusy,
+  archiveError,
+  onArchive,
+  dismissBusy,
+  dismissError,
+  onDismiss,
+  emptyMessage,
+}: DuplicateGroupCardsProps): JSX.Element {
+  if (groups.length === 0) {
+    return <p className="eq-queue__section-hint">{emptyMessage}</p>;
+  }
+
+  return (
+    <ul className="eq-dupe-group-list">
+      {groups.map((group) => {
+        const busy = !!dismissBusy[group.key];
+        const err = dismissError[group.key];
+        return (
+          <li key={group.key} className="eq-dupe-group-card">
+            <div className="eq-dupe-group-card__header">
+              <span className="eq-drill__dupe-badge">{fieldLabel(group.dupeField)}</span>
+              <span className="eq-dupe-group-card__count">
+                {group.rows.length} record{group.rows.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <ul className="eq-dupe-group-card__rows">
+              {group.rows.map((row) => {
+                const rowId = rowKey(entity, row);
+                const rowBusy = !!archiveBusy[rowId];
+                const rowErr = archiveError[rowId];
+                return (
+                  <li key={rowId} className="eq-dupe-group-card__row">
+                    <span className="eq-dupe-group-card__row-text">
+                      {dupeRowSummary(row, displayColumns)}
+                    </span>
+                    {archivable && canEditCanonical && (
+                      <button
+                        type="button"
+                        className="eq-drill__suggest-btn"
+                        disabled={rowBusy}
+                        onClick={() => onArchive(rowId)}
+                      >
+                        {rowBusy ? "Archiving…" : "Archive"}
+                      </button>
+                    )}
+                    {rowErr && <span className="eq-drill__dupe-error">{rowErr}</span>}
+                  </li>
+                );
+              })}
+            </ul>
+            {canEditCanonical && (
+              <div className="eq-dupe-group-card__footer">
+                <button
+                  type="button"
+                  className="eq-intake-btn-ghost eq-queue__btn"
+                  disabled={busy}
+                  onClick={() => onDismiss(group.dupeField, group.dupeKey)}
+                >
+                  {busy ? "Dismissing…" : "Not a duplicate"}
+                </button>
+                {err && <span className="eq-drill__dupe-error">{err}</span>}
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
