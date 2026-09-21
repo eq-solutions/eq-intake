@@ -31,6 +31,7 @@ import type {
 import type { SupabaseLikeClient } from "../canonical/commit-canonical.js";
 import { fieldLabel } from "../shared/entity-label.js";
 import { Table, type TableColumn } from "@eq-solutions/ui/Table";
+import { ContactDuplicateMergePanel } from "./ContactDuplicateMergePanel.js";
 
 export interface EntityDrillDownProps {
   entity: string;
@@ -1189,7 +1190,7 @@ export function EntityDrillDown({
       });
     }
 
-    if (filterMode === "duplicates" && entity !== "sites" && canEditCanonical) {
+    if (filterMode === "duplicates" && entity !== "sites" && entity !== "contacts" && canEditCanonical) {
       cols.push({
         key: "_dismiss",
         header: "Not a duplicate",
@@ -1222,7 +1223,7 @@ export function EntityDrillDown({
       });
     }
 
-    if (filterMode === "duplicates" && entity !== "sites" && isArchivableDuplicate(entity) && canEditCanonical) {
+    if (filterMode === "duplicates" && entity !== "sites" && entity !== "contacts" && isArchivableDuplicate(entity) && canEditCanonical) {
       cols.push({
         key: "_archive",
         header: "Archive",
@@ -1496,6 +1497,17 @@ export function EntityDrillDown({
           bulkSaving={bulkSaving}
           bulkResult={bulkResult}
           bulkError={bulkError}
+        />
+      ) : filterMode === "duplicates" && entity === "contacts" ? (
+        // Contacts dupes use the same card-per-group merge panel already live
+        // in the To Do tab (same/different/unsure verdict, preview-then-
+        // confirm) instead of this file's generic flat-table columns — see
+        // ContactDuplicateMergePanel.tsx. Keeps one duplicate-resolution UI
+        // for contacts instead of two disagreeing ones.
+        <ContactDuplicateMergePanel
+          supabase={supabase}
+          canMergeContacts={canMergeSites}
+          onDataChanged={() => setRefreshCounter((c) => c + 1)}
         />
       ) : (
         <Table<DrillRow>
