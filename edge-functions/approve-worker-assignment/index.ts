@@ -80,7 +80,11 @@ Deno.serve(async (req: Request) => {
   // ── Step 3: upsert into employer canonical ───────────────────────────────
   // app_data is in the exposed-schemas list — use .schema('app_data') to
   // switch PostgREST away from the default public schema.
-  const employerAdmin = createClient(EMPLOYER_URL, EMPLOYER_SERVICE_ROLE)
+  // x-eq-source lets app_data.fn_audit (eq-shell migration 0364) attribute these
+  // writes to intake rather than 'system'.
+  const employerAdmin = createClient(EMPLOYER_URL, EMPLOYER_SERVICE_ROLE, {
+    global: { headers: { 'x-eq-source': 'intake' } },
+  })
   const appData = employerAdmin.schema('app_data')
   const now = new Date().toISOString()
 
