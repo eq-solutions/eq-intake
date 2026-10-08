@@ -41,7 +41,7 @@ function fakeClient(
   const client = {
     rpc: async (name: string, params: Record<string, unknown>) => {
       calls.push({ name, params });
-      if (name === "eq_tidy_read_entity") {
+      if (name === "eq_tidy_read_entity_columns") {
         return { data: licences, error: null };
       }
       if (name === "eq_quality_upsert_alert") {

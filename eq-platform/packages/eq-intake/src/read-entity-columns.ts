@@ -1,15 +1,17 @@
 /**
  * @eq/intake — shared column-projected entity reader
  *
- * Wraps eq_tidy_read_entity_columns (0303_tidy_read_entity_columns.sql) with
- * a fallback to the original full-row eq_tidy_read_entity for any tenant
- * where the projected RPC hasn't been dispatched yet — it's rolled out
- * per-tenant via eq-shell's tenant-migrate.yml, not fleet-wide (first
- * dispatch: sks/ehow only, 2026-09-07; eq/zaap not yet covered). Falls back
- * on ANY error rather than string-matching Postgres's specific
- * undefined-function message, so it also covers the RPC existing but
- * erroring for some other reason. Once every tenant has it, the fallback
- * branch simply never fires.
+ * Wraps eq_tidy_read_entity_columns (0303_tidy_read_entity_columns.sql) and
+ * returns its result — data or error — exactly as the RPC gave it.
+ *
+ * There used to be a fallback here to the unprojected, 1-arg
+ * eq_tidy_read_entity on ANY error, for tenants the projected RPC hadn't
+ * reached yet. Removed 2026-10-09: verified live that every active tenant
+ * data plane (eq/zaap, sks/ehow, graft) has eq_tidy_read_entity_columns, and
+ * zaap/graft don't have the 1-arg eq_tidy_read_entity at all — so the
+ * fallback never rescued a read, it only masked real errors (e.g. a 42501
+ * role-gate refusal came back as a second call's different error, or on ehow
+ * as an unprojected full row).
  *
  * duplicate-detect.ts deliberately does NOT use this — its completeness
  * tie-break needs every column on the row, so it keeps calling
@@ -28,7 +30,5 @@ export async function readEntityColumns(
   columns: string[],
 ): Promise<{ data: unknown; error: { message: string } | null }> {
   const client = supabase as unknown as RpcClient;
-  const projected = await client.rpc('eq_tidy_read_entity_columns', { p_table: table, p_columns: columns });
-  if (!projected.error) return projected;
-  return client.rpc('eq_tidy_read_entity', { p_table: table });
+  return client.rpc('eq_tidy_read_entity_columns', { p_table: table, p_columns: columns });
 }
