@@ -13,9 +13,8 @@
  * role-gate refusal came back as a second call's different error, or on ehow
  * as an unprojected full row).
  *
- * duplicate-detect.ts deliberately does NOT use this — its completeness
- * tie-break needs every column on the row, so it keeps calling
- * eq_tidy_read_entity directly, unprojected.
+ * Nothing in @eq/intake or @eq/intake-demo calls the 1-arg function any more.
+ * Callers that want "the whole row" pass a list from entity-columns.ts.
  */
 
 import type { SupabaseLikeClient } from './canonical/commit-canonical.js';

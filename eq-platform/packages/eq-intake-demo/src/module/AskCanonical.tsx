@@ -3,15 +3,16 @@
  *
  * Sends a plain-English question to the eq-ai-assist Edge Function on
  * sks-canonical. Claude Haiku parses the intent (which entity + which
- * filters) and returns matching rows fetched client-side via the existing
- * eq_tidy_read_entity RPC.
+ * filters) and returns matching rows fetched client-side via
+ * eq_tidy_read_entity_columns (every known column; PII is withheld by the RPC
+ * for a viewer without entity.view_pii).
  *
  * No raw SQL is generated or executed. No schema is exposed to the model.
  * The Edge Function requires the ANTHROPIC_API_KEY secret to be set.
  */
 
 import { useState, type JSX } from "react";
-import { askCanonical } from "@eq/intake";
+import { askCanonical, readEntityColumns, ENTITY_COLUMNS, isEntityTable } from "@eq/intake";
 import type { AskResult, AskFilter } from "@eq/intake";
 import type { SupabaseLikeClient } from "../canonical/commit-canonical.js";
 
@@ -54,9 +55,12 @@ export function AskCanonical({ supabase, onEntityClick }: AskCanonicalProps): JS
       error: { message: string } | null;
     }>;
 
-  // Fetches all active rows for an entity via eq_tidy_read_entity RPC
+  // Fetches every row for an entity, all known columns. A failed read throws
+  // rather than answering "0 matches".
   const fetchEntity = async (entity: string): Promise<Record<string, unknown>[]> => {
-    const r = await sb.rpc('eq_tidy_read_entity', { p_table: entity });
+    if (!isEntityTable(entity)) throw new Error(`Can't look up "${entity}" here.`);
+    const r = await readEntityColumns(sb, entity, [...ENTITY_COLUMNS[entity]]);
+    if (r.error) throw new Error(r.error.message);
     return (r.data as Record<string, unknown>[] | null) ?? [];
   };
 

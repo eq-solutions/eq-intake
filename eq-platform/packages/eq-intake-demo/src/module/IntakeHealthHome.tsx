@@ -129,20 +129,25 @@ function computeDimensions(
   const contactsHs = scores?.find((s) => s.entity === "contacts") ?? null;
   const sitesHs    = scores?.find((s) => s.entity === "sites") ?? null;
 
+  // has_email / has_emergency_contact are null when this viewer can't see
+  // those fields (no entity.view_pii) — left out of the average, not scored 0.
+  const hasEmail     = cm?.staff.has_email ?? null;
+  const hasEmergency = cm?.staff.has_emergency_contact ?? null;
+
   // Completeness: staff email + contacts completeness (can we reach people)
-  const staffEmailRate = st > 0 ? (cm!.staff.has_email / st) : 0;
+  const staffEmailRate = st > 0 && hasEmail !== null ? hasEmail / st : 0;
   const completeness    = averageStarted(
-    { value: staffEmailRate, started: st > 0 },
+    { value: staffEmailRate, started: st > 0 && hasEmail !== null },
     contactsHs ? { value: contactsHs.score, started: contactsHs.started } : null,
   );
 
   // Compliance: licence coverage (≥1 record per staff) + emergency contacts
   const licenceRecords  = licences?.records_total ?? 0;
   const licenceCoverage = st > 0 ? Math.min(1, licenceRecords / st) : 0;
-  const emergencyRate   = st > 0 ? (cm!.staff.has_emergency_contact / st) : 0;
+  const emergencyRate   = st > 0 && hasEmergency !== null ? hasEmergency / st : 0;
   const compliance      = averageStarted(
     { value: licenceCoverage, started: st > 0 },
-    { value: emergencyRate, started: st > 0 },
+    { value: emergencyRate, started: st > 0 && hasEmergency !== null },
   );
 
   // Serviceability: trade classification + sites completeness

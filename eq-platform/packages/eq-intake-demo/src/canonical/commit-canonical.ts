@@ -531,8 +531,8 @@ export interface DuplicateAgainstLiveCandidate {
 /**
  * Pre-commit scan for rows that look like a record ALREADY SAVED in EQ —
  * the gap previewDuplicateRows's own doc comment names explicitly (no RPC to
- * read existing customers). That RPC exists now: eq_tidy_read_entity, already
- * live for the health dashboard's own duplicate sweep (@eq/intake's
+ * read existing customers). That RPC exists now: eq_tidy_read_entity_columns,
+ * already live for the health dashboard's own duplicate sweep (@eq/intake's
  * detectAllDuplicates). `lookup` is that same read, supplied by the host
  * (IntakeModule) rather than called from here — this package stays DB-free,
  * mirroring dedup.ts's DupLookup pattern for assets.

@@ -95,7 +95,7 @@ export function applyFilters(
  * @param question      The natural language question from the user.
  * @param callEdgeFn    Injected Edge Function caller (see ai-client.ts).
  * @param fetchEntity   Async function that returns all rows for a given entity
- *                      (typically wraps eq_tidy_read_entity RPC).
+ *                      (typically readEntityColumns with ENTITY_COLUMNS).
  */
 export async function askCanonical(
   question:    string,

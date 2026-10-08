@@ -9,6 +9,7 @@
  * fetch-once-filter-often shape as useFieldImportanceOverrides.
  */
 import { useEffect, useMemo, useState } from "react";
+import { readEntityColumns, IDENTITY_COLUMNS } from "@eq/intake";
 import type { LiveRowLookup } from "@eq/intake";
 import type { FileSlot } from "./intake-bundle.js";
 import type { RoleName } from "../rollup/roles.js";
@@ -56,7 +57,9 @@ export function useLiveDuplicateWarnings(
       if (!supabase) { setRawWarnings([]); return; }
 
       const lookup: LiveRowLookup = async (entity) => {
-        const { data, error } = await sb.rpc("eq_tidy_read_entity", { p_table: entity });
+        const columns = IDENTITY_COLUMNS[entity];
+        if (!columns) return [];
+        const { data, error } = await readEntityColumns(sb, entity, columns);
         if (error) throw new Error(error.message);
         return (data as Record<string, unknown>[] | null) ?? [];
       };
