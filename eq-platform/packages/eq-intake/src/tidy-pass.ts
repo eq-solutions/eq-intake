@@ -25,6 +25,7 @@ import licenceSchema  from '@eq/schemas/schemas/licence.schema.json';
 import assetSchema    from '@eq/schemas/schemas/asset.schema.json';
 
 import type { SupabaseLikeClient } from './canonical/commit-canonical.js';
+import { readEntityColumns } from './read-entity-columns.js';
 import type {
   TidyEntity,
   TidyFix,
@@ -250,13 +251,19 @@ async function scanEntity(
 
   onProgress?.(`Scanning ${table}…`);
 
-  // Read all rows via the tidy read RPC
-  const { data, error } = await supabase.rpc('eq_tidy_read_entity', {
-    p_table: table,
-  });
+  const pkField = PK_FIELD[entity];
+  const fullSchema = schema as { properties: Record<string, unknown>; required?: string[] };
+  const schemaProps = fullSchema.properties ?? {};
+
+  // Read exactly the fields the schema validates, plus the row id.
+  const { data, error } = await readEntityColumns(
+    supabase,
+    table,
+    [...new Set([pkField, ...Object.keys(schemaProps)])],
+  );
 
   if (error) {
-    throw new Error(`eq_tidy_read_entity(${table}) failed: ${error.message}`);
+    throw new Error(`eq_tidy_read_entity_columns(${table}) failed: ${error.message}`);
   }
 
   const rows = (data as Record<string, unknown>[] | null) ?? [];
@@ -266,11 +273,26 @@ async function scanEntity(
   const gaps:        GapItem[]    = [];
   const reviewFlags: ReviewFlag[] = [];
 
+  // Validate only the fields that came back. A field the RPC withheld (PII
+  // for a caller without entity.view_pii, or a column this tenant's table
+  // doesn't have) is absent from every row — validating it would report a
+  // required field like licence_number as missing on every row, and propose
+  // schema defaults (licence metadata = {}) over values this caller just
+  // can't see.
+  const returned = new Set(rows.length > 0 ? Object.keys(rows[0]!) : []);
+  const visibleProps = Object.fromEntries(
+    Object.entries(schemaProps).filter(([field]) => returned.has(field)),
+  );
+  const visibleSchema = {
+    ...fullSchema,
+    properties: visibleProps,
+    required:   (fullSchema.required ?? []).filter((field) => returned.has(field)),
+  };
+
   // Build an identity mapping: each canonical field name maps to itself.
   // validate() will run coercions and return normalised canonical values.
-  const schemaProps = (schema as { properties: Record<string, unknown> }).properties ?? {};
   const identityMapping: Record<string, string> = {};
-  for (const field of Object.keys(schemaProps)) {
+  for (const field of Object.keys(visibleProps)) {
     identityMapping[field] = field;
   }
 
@@ -279,7 +301,7 @@ async function scanEntity(
   let result: Awaited<ReturnType<typeof validate>>;
   try {
     result = await validate({
-      schema:               schema as Parameters<typeof validate>[0]['schema'],
+      schema:               visibleSchema as Parameters<typeof validate>[0]['schema'],
       mapping:              identityMapping,
       rows,
       tenantId,
@@ -296,8 +318,6 @@ async function scanEntity(
       `Validation scan failed for ${table}: ${e instanceof Error ? e.message : String(e)}`,
     );
   }
-
-  const pkField = PK_FIELD[entity];
 
   // --- valid_rows: no errors, but may have been coerced ---
   type ValidLike = { source_row_index: number; canonical: Record<string, unknown> };

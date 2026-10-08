@@ -68,6 +68,12 @@ export type {
 } from "./reconcile.js";
 
 export { fetchCanonicalRows, entityToTable } from "./fetch-canonical.js";
+
+// Column-projected entity reads (eq_tidy_read_entity_columns) — the only way
+// to read app_data entities; the 1-arg eq_tidy_read_entity is gone or gated.
+export { readEntityColumns } from "./read-entity-columns.js";
+export { ENTITY_COLUMNS, PII_COLUMNS, isEntityTable, nonPiiColumns } from "./entity-columns.js";
+export type { EntityTable } from "./entity-columns.js";
 export type { CanonicalFetchClient, CanonicalEntity } from "./fetch-canonical.js";
 
 export { archiveDuplicateRecord, isArchivableDuplicate } from "./archive-duplicate.js";
@@ -145,7 +151,7 @@ export type {
 // detectAllDuplicates() — exported so other consumers of this package (e.g.
 // eq-shell's own Contacts dedup) can reuse the same fuzzy-match algorithm
 // instead of maintaining a second copy of it.
-export { detectAllDuplicates, identityLabelFor, identityKeyFor, dice, HIGH_SIM, PK, matchAgainstLiveRecords } from "./duplicate-detect.js";
+export { detectAllDuplicates, identityLabelFor, identityKeyFor, dice, HIGH_SIM, PK, IDENTITY_COLUMNS, matchAgainstLiveRecords } from "./duplicate-detect.js";
 export type { DuplicateCluster, DuplicateReport, LiveIdentityMatch, LiveRowLookup } from "./duplicate-detect.js";
 
 export { decayCheck } from "./decay-detect.js";

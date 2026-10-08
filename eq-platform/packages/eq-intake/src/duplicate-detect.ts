@@ -26,6 +26,8 @@ import {
   normaliseAbn,
 } from './normalize.js';
 import type { SupabaseLikeClient } from './canonical/commit-canonical.js';
+import { readEntityColumns } from './read-entity-columns.js';
+import { nonPiiColumns } from './entity-columns.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -136,7 +138,10 @@ function isBlank(v: unknown): boolean {
 }
 
 /** Count of populated fields on a row — a cheap, entity-agnostic completeness
- *  proxy used only to break survivor ties between otherwise-equal rows. */
+ *  proxy used only to break survivor ties between otherwise-equal rows.
+ *  detectAllDuplicates reads every non-PII column (nonPiiColumns), so the
+ *  count — and therefore the suggested survivor — is the same whoever runs
+ *  the scan, with or without entity.view_pii. */
 function completenessOf(row: EntityRow): number {
   let n = 0;
   for (const v of Object.values(row)) if (!isBlank(v)) n++;
@@ -448,24 +453,35 @@ function detectForEntity(entity: string, rows: EntityRow[]): DuplicateReport {
 // Public: detectAllDuplicates
 // ---------------------------------------------------------------------------
 
-type RpcClient = {
-  rpc: (name: string, params: unknown) => Promise<{ data: unknown; error: { message: string } | null }>;
-};
-
 const ENTITIES = ['staff', 'customers', 'sites', 'contacts', 'assets'] as const;
+
+/**
+ * The columns matchAgainstLiveRecords' lookup needs per entity: PK plus
+ * whatever identityKeyFor/identityLabelFor read. Hosts pass these to
+ * readEntityColumns when building a LiveRowLookup. None are PII.
+ */
+export const IDENTITY_COLUMNS: Record<string, string[]> = {
+  staff:     ['staff_id', 'first_name', 'last_name'],
+  customers: ['customer_id', 'company_name'],
+  sites:     ['site_id', 'name', 'address_line_1'],
+  contacts:  ['first_name', 'last_name'],
+  assets:    ['name'],
+};
 
 export async function detectAllDuplicates(
   supabase: SupabaseLikeClient,
 ): Promise<DuplicateReport[]> {
-  const client = supabase as unknown as RpcClient;
-
   const results = await Promise.all(
     ENTITIES.map((entity) =>
-      client
-        .rpc('eq_tidy_read_entity', { p_table: entity })
-        .then((r) => ({ entity, ...r })),
+      readEntityColumns(supabase, entity, nonPiiColumns(entity)).then((r) => ({ entity, ...r })),
     ),
   );
+
+  // A failed read must not come back as "no duplicates" for that entity.
+  const failed = results.find((r) => r.error);
+  if (failed?.error) {
+    throw new Error(`Reading ${failed.entity} failed: ${failed.error.message}`);
+  }
 
   return results.map(({ entity, data: rawData }) => {
     const rows = (rawData as EntityRow[] | null) ?? [];
@@ -484,9 +500,9 @@ export interface LiveIdentityMatch {
 }
 
 /**
- * Host-supplied read of an entity's current live rows — same shape
- * detectAllDuplicates already gets from eq_tidy_read_entity, just scoped to
- * one entity instead of all five. Kept as an injected function (mirroring
+ * Host-supplied read of an entity's current live rows — at least the
+ * IDENTITY_COLUMNS for that entity (readEntityColumns), scoped to one entity
+ * instead of all five. Kept as an injected function (mirroring
  * dedup.ts's DupLookup) rather than this module taking a Supabase client
  * directly, so @eq/intake stays DB-free and the host owns the actual RPC call.
  */

@@ -43,6 +43,7 @@ import {
   getFieldSuggestedValues,
   adjudicateQueueDuplicateWithAI,
   makeEdgeFnCaller,
+  ENTITY_COLUMNS,
 } from "@eq/intake";
 import type { AiQueueDuplicateVerdict } from "@eq/intake";
 import type { SupabaseLikeClient } from "../canonical/commit-canonical.js";
@@ -247,7 +248,10 @@ export function RemediationQueue({ supabase, canMergeSites, canEditCanonical, te
   useEffect(() => {
     if (!rpc || customers !== null) return;
     if (!items?.some((i) => i.category === "link")) return;
-    void rpc("eq_tidy_read_entity", { p_table: "customers" }).then(({ data }) => {
+    void rpc("eq_tidy_read_entity_columns", {
+      p_table: "customers",
+      p_columns: ["customer_id", "company_name", "active"],
+    }).then(({ data }) => {
       const rows = ((data as Record<string, unknown>[] | null) ?? [])
         .filter((r) => r["active"] !== false)
         .map((r) => ({ customer_id: String(r["customer_id"]), company_name: String(r["company_name"] ?? "") }))
@@ -263,7 +267,12 @@ export function RemediationQueue({ supabase, canMergeSites, canEditCanonical, te
   useEffect(() => {
     if (!rpc || contactRecords !== null) return;
     if (!items?.some((i) => i.category === "duplicate" && i.entity === "contacts")) return;
-    void rpc("eq_tidy_read_entity", { p_table: "contacts" }).then(({ data }) => {
+    // Every contact column — the RPC itself withholds email/phones/notes from
+    // a viewer without entity.view_pii.
+    void rpc("eq_tidy_read_entity_columns", {
+      p_table: "contacts",
+      p_columns: [...ENTITY_COLUMNS.contacts],
+    }).then(({ data }) => {
       const rows = (data as Record<string, unknown>[] | null) ?? [];
       const byId: Record<string, Record<string, unknown>> = {};
       for (const r of rows) byId[String(r["contact_id"])] = r;

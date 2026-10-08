@@ -13,18 +13,12 @@ import { describe, it, expect } from "vitest";
 import { runTidyPass, commitTidyFixes } from "../src/tidy-pass.js";
 import type { SupabaseLikeClient } from "../src/canonical/commit-canonical.js";
 import type { TidyFix } from "../src/tidy-types.js";
+import { fakeEntityRpc } from "./fake-entity-rpc.js";
 
 const TENANT = "7dee117c-98bd-4d39-af8c-2c81d02a1e85";
 
-function fakeClient(staffRows: unknown[]): SupabaseLikeClient {
-  return {
-    rpc: async (name: string, params: Record<string, unknown>) => {
-      if (name === "eq_tidy_read_entity" && params.p_table === "staff") {
-        return { data: staffRows, error: null };
-      }
-      return { data: [], error: null };
-    },
-  } as unknown as SupabaseLikeClient;
+function fakeClient(staffRows: Record<string, unknown>[]): SupabaseLikeClient {
+  return fakeEntityRpc({ staff: staffRows }, { canViewPii: true }).client;
 }
 
 describe("runTidyPass — required-field gaps", () => {
@@ -128,15 +122,8 @@ describe("runTidyPass — required-field gaps", () => {
 });
 
 describe("runTidyPass — assets (no silent skip)", () => {
-  function fakeAssetClient(assetRows: unknown[]): SupabaseLikeClient {
-    return {
-      rpc: async (name: string, params: Record<string, unknown>) => {
-        if (name === "eq_tidy_read_entity" && params.p_table === "assets") {
-          return { data: assetRows, error: null };
-        }
-        return { data: [], error: null };
-      },
-    } as unknown as SupabaseLikeClient;
+  function fakeAssetClient(assetRows: Record<string, unknown>[]): SupabaseLikeClient {
+    return fakeEntityRpc({ assets: assetRows }).client;
   }
 
   it("scans assets when the schema is wired (no quiet empty report)", async () => {
@@ -179,6 +166,49 @@ describe("runTidyPass — assets (no silent skip)", () => {
     });
 
     const gap = report.gaps.find((g) => g.field === "name");
+    expect(gap).toBeDefined();
+    expect(gap!.gap_type).toBe("required_missing");
+  });
+});
+
+describe("runTidyPass — column-projected read", () => {
+  const LICENCE = {
+    licence_id: "l-1",
+    tenant_id: TENANT,
+    staff_id: "00000000-0000-4000-8000-000000000002",
+    licence_type: "White Card",
+    licence_number: null,
+    metadata: null,
+    active: true,
+  };
+
+  it("reads through eq_tidy_read_entity_columns with the PK and the schema's fields", async () => {
+    const { client, calls } = fakeEntityRpc({ staff: [] }, { canViewPii: true });
+
+    await runTidyPass({ supabase: client, tenantId: TENANT, entities: ["staff"] });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.table).toBe("staff");
+    expect(calls[0]!.columns).toContain("staff_id");
+    expect(calls[0]!.columns).toContain("employment_type");
+  });
+
+  it("does not report a withheld PII field as missing, or propose a default over it", async () => {
+    // Without entity.view_pii the RPC drops licence_number and metadata.
+    const { client } = fakeEntityRpc({ licences: [LICENCE] }, { canViewPii: false });
+
+    const report = await runTidyPass({ supabase: client, tenantId: TENANT, entities: ["licence"] });
+
+    expect(report.gaps.find((g) => g.field === "licence_number")).toBeUndefined();
+    expect(report.auto_fixes.find((f) => f.field === "metadata")).toBeUndefined();
+  });
+
+  it("still reports the same field as missing when the viewer can see it", async () => {
+    const { client } = fakeEntityRpc({ licences: [LICENCE] }, { canViewPii: true });
+
+    const report = await runTidyPass({ supabase: client, tenantId: TENANT, entities: ["licence"] });
+
+    const gap = report.gaps.find((g) => g.field === "licence_number");
     expect(gap).toBeDefined();
     expect(gap!.gap_type).toBe("required_missing");
   });

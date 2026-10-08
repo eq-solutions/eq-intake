@@ -11,9 +11,14 @@
  * The four staff fields checked here (email, phone, trade,
  * emergency_contact_name) are exactly field-importance.ts's staff entries —
  * keep them in sync if that rulebook changes.
+ *
+ * email, phone and emergency_contact_name are PII: eq_tidy_read_entity_columns
+ * withholds them from a caller without entity.view_pii. Their counts come back
+ * null in that case ("can't see"), never 0 ("nobody has one").
  */
 
 import type { SupabaseLikeClient } from './canonical/commit-canonical.js';
+import { readEntityColumns } from './read-entity-columns.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -22,10 +27,13 @@ import type { SupabaseLikeClient } from './canonical/commit-canonical.js';
 export interface ComplianceMetrics {
   staff: {
     total:                 number;
-    has_email:             number;
-    has_phone:             number;
+    /** null = this viewer can't see staff email (no entity.view_pii). */
+    has_email:             number | null;
+    /** null = this viewer can't see staff phone (no entity.view_pii). */
+    has_phone:             number | null;
     has_trade:             number;
-    has_emergency_contact: number;
+    /** null = this viewer can't see emergency contacts (no entity.view_pii). */
+    has_emergency_contact: number | null;
   };
   licences: {
     total: number; // total licence records (not just expiring)
@@ -35,10 +43,6 @@ export interface ComplianceMetrics {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-type RpcClient = {
-  rpc: (name: string, params: unknown) => Promise<{ data: unknown; error: { message: string } | null }>;
-};
 
 function notBlank(v: unknown): boolean {
   if (v === null || v === undefined) return false;
@@ -53,12 +57,15 @@ function notBlank(v: unknown): boolean {
 export async function computeComplianceMetrics(
   supabase: SupabaseLikeClient,
 ): Promise<ComplianceMetrics> {
-  const client = supabase as unknown as RpcClient;
-
   const [staffResult, licenceResult] = await Promise.all([
-    client.rpc('eq_tidy_read_entity', { p_table: 'staff' }),
-    client.rpc('eq_tidy_read_entity', { p_table: 'licences' }),
+    readEntityColumns(supabase, 'staff', [
+      'staff_id', 'active', 'email', 'phone', 'trade', 'emergency_contact_name',
+    ]),
+    readEntityColumns(supabase, 'licences', ['licence_id']),
   ]);
+
+  if (staffResult.error) throw new Error(`Reading staff failed: ${staffResult.error.message}`);
+  if (licenceResult.error) throw new Error(`Reading licences failed: ${licenceResult.error.message}`);
 
   // Filter to active staff only (mirrors the live query)
   const staffRows = (
@@ -67,13 +74,20 @@ export async function computeComplianceMetrics(
 
   const licenceRows = (licenceResult.data as Record<string, unknown>[] | null) ?? [];
 
+  // A withheld column is absent from every row. With no rows there's nothing
+  // to count either way, so 0 is still true.
+  const countFilled = (field: string): number | null =>
+    staffRows.length > 0 && !(field in staffRows[0]!)
+      ? null
+      : staffRows.filter((r) => notBlank(r[field])).length;
+
   return {
     staff: {
       total:                 staffRows.length,
-      has_email:             staffRows.filter((r) => notBlank(r['email'])).length,
-      has_phone:             staffRows.filter((r) => notBlank(r['phone'])).length,
+      has_email:             countFilled('email'),
+      has_phone:             countFilled('phone'),
       has_trade:             staffRows.filter((r) => notBlank(r['trade'])).length,
-      has_emergency_contact: staffRows.filter((r) => notBlank(r['emergency_contact_name'])).length,
+      has_emergency_contact: countFilled('emergency_contact_name'),
     },
     licences: {
       total: licenceRows.length,
