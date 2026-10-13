@@ -44,6 +44,8 @@ import {
   adjudicateQueueDuplicateWithAI,
   makeEdgeFnCaller,
   ENTITY_COLUMNS,
+  findStaleQueueItems,
+  STALE_STAFF_COLUMNS,
 } from "@eq/intake";
 import type { AiQueueDuplicateVerdict } from "@eq/intake";
 import type { SupabaseLikeClient } from "../canonical/commit-canonical.js";
@@ -179,7 +181,26 @@ export function RemediationQueue({ supabase, canMergeSites, canEditCanonical, te
     const { data, error: err } = await rpc("eq_queue_list");
     setLoading(false);
     if (err) { setError(err.message); return; }
-    const rows = (data as QueueItem[] | null) ?? [];
+    let rows = (data as QueueItem[] | null) ?? [];
+    // Drop (and close out) items the live record has already outgrown — a
+    // best-effort sweep; any failure just leaves the list as the RPC gave it.
+    if (rows.some((r) => r.entity === "staff")) {
+      try {
+        const staff = await rpc("eq_tidy_read_entity_columns", {
+          p_table: "staff",
+          p_columns: [...STALE_STAFF_COLUMNS],
+        });
+        if (!staff.error) {
+          const stale = findStaleQueueItems(rows, (staff.data as Record<string, unknown>[] | null) ?? []);
+          if (stale.length > 0) {
+            const gone = new Set(stale.map((s) => s.queue_id));
+            rows = rows.filter((r) => !gone.has(r.queue_id));
+            await Promise.all(stale.map((s) =>
+              rpc("eq_queue_resolve", { p_queue_id: s.queue_id, p_status: "dismissed", p_note: s.note })));
+          }
+        }
+      } catch { /* best-effort */ }
+    }
     setItems(rows);
     // Prefill editable values from the steward's suggestions
     const prefill: Record<string, string> = {};
