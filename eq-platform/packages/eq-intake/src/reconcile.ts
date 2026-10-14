@@ -82,6 +82,14 @@ export interface ReconcileResult {
   onlyInCanonical: ReconcileRow[];
   /** The field name used as the match key. */
   matchKey: string;
+  /**
+   * True when canonical rows exist but none carry the match key (e.g. the key
+   * is email and the viewer lacks entity.view_pii, so the column was withheld).
+   * Nothing could match, so every source row is in onlyInSource — "new" there
+   * means "couldn't compare", not "doesn't exist". Callers must not offer to
+   * commit those rows as new.
+   */
+  matchKeyUnavailable: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -116,18 +124,24 @@ const PREFERRED_KEYS: string[] = [
  * Returns the first column name (from the sheet's headerRow) that matches
  * any of the PREFERRED_KEYS (case-insensitive). Falls back to the first
  * column if none match.
+ *
+ * When `canonicalKeys` (the column names present on the fetched canonical
+ * rows) is given and non-empty, a candidate the canonical rows don't carry is
+ * skipped — a key the database side withheld can't join anything.
  */
-export function detectMatchKey(sheet: ParsedSheet): string {
+export function detectMatchKey(sheet: ParsedSheet, canonicalKeys?: ReadonlySet<string>): string {
   const lower = sheet.headerRow.map((h) => h.toLowerCase().replace(/[\s_-]+/g, "_"));
+  const usable = (idx: number): boolean =>
+    !canonicalKeys || canonicalKeys.size === 0 || canonicalKeys.has(sheet.headerRow[idx]!) || canonicalKeys.has(lower[idx]!);
 
   for (const preferred of PREFERRED_KEYS) {
     const idx = lower.indexOf(preferred);
-    if (idx !== -1) return sheet.headerRow[idx]!;
+    if (idx !== -1 && usable(idx)) return sheet.headerRow[idx]!;
   }
 
   // Partial match — "email" inside a longer column name
   for (const preferred of PREFERRED_KEYS) {
-    const idx = lower.findIndex((h) => h.includes(preferred));
+    const idx = lower.findIndex((h, i) => h.includes(preferred) && usable(i));
     if (idx !== -1) return sheet.headerRow[idx]!;
   }
 
@@ -156,7 +170,10 @@ export function reconcileSheets(
   matchKey?: string,
   entity?: string,
 ): ReconcileResult {
-  const key = matchKey ?? detectMatchKey(sourceSheet);
+  const canonicalKeys = new Set<string>();
+  for (const row of canonicalRows) for (const k of Object.keys(row)) canonicalKeys.add(k);
+  const key = matchKey ?? detectMatchKey(sourceSheet, canonicalKeys);
+  const matchKeyUnavailable = canonicalRows.length > 0 && !canonicalKeys.has(key);
 
   // Build a map of canonical rows keyed by matchKey value for O(1) lookup.
   const canonicalByKey = new Map<string, Record<string, unknown>>();
@@ -238,7 +255,7 @@ export function reconcileSheets(
     }
   }
 
-  return { matched, conflicts, onlyInSource, onlyInCanonical, matchKey: key };
+  return { matched, conflicts, onlyInSource, onlyInCanonical, matchKey: key, matchKeyUnavailable };
 }
 
 // ---------------------------------------------------------------------------

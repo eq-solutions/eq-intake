@@ -120,3 +120,29 @@ describe("reconcileSheets — fuzzy identity pass (entity supplied)", () => {
     expect(result.conflicts.every((r) => r.matchedBy === "fuzzy")).toBe(true);
   });
 });
+
+describe("reconcileSheets — canonical columns withheld (viewer lacks entity.view_pii)", () => {
+  const src = sheet(
+    ["email", "external_id", "first_name"],
+    [{ email: "a@x.au", external_id: "E1", first_name: "Ann" }],
+  );
+  // email stripped from the canonical row, as the RPC does for a viewer without view_pii
+  const canonical = [{ external_id: "E1", first_name: "Ann" }];
+
+  it("falls back to a key the canonical rows carry instead of matching nothing", () => {
+    const r = reconcileSheets(src, canonical);
+    expect(r.matchKey).toBe("external_id");
+    expect(r.matchKeyUnavailable).toBe(false);
+    expect(r.matched).toHaveLength(1);
+    expect(r.onlyInSource).toHaveLength(0);
+  });
+
+  it("flags matchKeyUnavailable when no usable key exists", () => {
+    const r = reconcileSheets(sheet(["email"], [{ email: "a@x.au" }]), [{ external_id: "E1" }]);
+    expect(r.matchKeyUnavailable).toBe(true);
+  });
+
+  it("is not unavailable when there are no canonical rows (genuinely empty)", () => {
+    expect(reconcileSheets(src, []).matchKeyUnavailable).toBe(false);
+  });
+});
