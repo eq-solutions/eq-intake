@@ -74,6 +74,9 @@ export { fetchCanonicalRows, entityToTable, withheldPiiColumns } from "./fetch-c
 export { readEntityColumns } from "./read-entity-columns.js";
 export { ENTITY_COLUMNS, PII_COLUMNS, isEntityTable, nonPiiColumns } from "./entity-columns.js";
 export type { EntityTable } from "./entity-columns.js";
+
+export { findStaleQueueItems, STALE_STAFF_COLUMNS } from "./queue-stale.js";
+export type { StaleCheckItem, StaleVerdict } from "./queue-stale.js";
 export type { CanonicalFetchClient, CanonicalEntity } from "./fetch-canonical.js";
 
 export { archiveDuplicateRecord, isArchivableDuplicate } from "./archive-duplicate.js";
