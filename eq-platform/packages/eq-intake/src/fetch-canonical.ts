@@ -5,25 +5,22 @@
  * current state from the database so the user can see what's new, what
  * conflicts, and what's already in sync.
  *
- * The client type is structural (no hard dep on @supabase/supabase-js) —
- * the same pattern used in commit-canonical.ts.
- *
- * RLS is enforced by the Supabase server; we only get back the current
- * tenant's rows. The caller provides the client (already authenticated).
+ * Reads go through eq_tidy_read_entity_columns (see read-entity-columns.ts),
+ * never a direct table select: authenticated has no SELECT on app_data.contacts
+ * (eq-shell 0376) and full-row reads are role-gated (0397). The RPC withholds
+ * PII columns from callers without entity.view_pii, so those keys are absent
+ * from the returned rows rather than null.
  */
 
+import { readEntityColumns } from "./read-entity-columns.js";
+import { ENTITY_COLUMNS, PII_COLUMNS, isEntityTable } from "./entity-columns.js";
+import type { SupabaseLikeClient } from "./canonical/commit-canonical.js";
+
 // ---------------------------------------------------------------------------
-// Client interface (structural — mirrors the subset we use from supabase-js)
+// Client interface
 // ---------------------------------------------------------------------------
 
-export interface CanonicalFetchClient {
-  from: (table: string) => {
-    select: (columns?: string) => Promise<{
-      data: Record<string, unknown>[] | null;
-      error: { message: string } | null;
-    }>;
-  };
-}
+export type CanonicalFetchClient = SupabaseLikeClient;
 
 // ---------------------------------------------------------------------------
 // Entity → table name mapping
@@ -80,11 +77,30 @@ export async function fetchCanonicalRows(
     return [];
   }
 
-  const { data, error } = await supabaseClient.from(table).select();
+  if (!isEntityTable(table)) return [];
+
+  const { data, error } = await readEntityColumns(supabaseClient, table, [...ENTITY_COLUMNS[table]]);
 
   if (error) {
     throw new Error(`fetchCanonicalRows(${table}): ${error.message}`);
   }
 
-  return data ?? [];
+  return (data as Record<string, unknown>[] | null) ?? [];
+}
+
+/**
+ * PII columns the RPC withheld from `rows` — the keys are absent, not null, for
+ * a viewer without entity.view_pii. Callers that match or score on these
+ * columns (duplicate detection, gap checks) should say so instead of reporting
+ * "none found". Empty when there are no rows to judge from.
+ */
+export function withheldPiiColumns(
+  entity: string,
+  rows: readonly Record<string, unknown>[],
+): string[] {
+  const table = entityToTable(entity);
+  if (!table || !isEntityTable(table) || rows.length === 0) return [];
+  const seen = new Set<string>();
+  for (const row of rows) for (const key of Object.keys(row)) seen.add(key);
+  return PII_COLUMNS[table].filter((c) => !seen.has(c));
 }

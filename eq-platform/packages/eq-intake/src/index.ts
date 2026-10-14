@@ -67,7 +67,7 @@ export type {
   Resolution,
 } from "./reconcile.js";
 
-export { fetchCanonicalRows, entityToTable } from "./fetch-canonical.js";
+export { fetchCanonicalRows, entityToTable, withheldPiiColumns } from "./fetch-canonical.js";
 
 // Column-projected entity reads (eq_tidy_read_entity_columns) — the only way
 // to read app_data entities; the 1-arg eq_tidy_read_entity is gone or gated.

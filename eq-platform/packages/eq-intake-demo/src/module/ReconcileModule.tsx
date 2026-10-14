@@ -92,8 +92,11 @@ export function ReconcileModule({ supabase, tenantId, createdBy, initialSlot, on
             supabase as unknown as Parameters<typeof fetchCanonicalRows>[0],
             initialSlot.entity,
           );
-        } catch {
-          canonicalRows = [];
+        } catch (e) {
+          // A failed read must not look like "nothing exists yet" — that would
+          // offer to add every source row as new.
+          if (!cancelled) setStep({ tag: "error", message: e instanceof Error ? e.message : String(e) });
+          return;
         }
       }
       if (cancelled) return;
@@ -139,11 +142,11 @@ export function ReconcileModule({ supabase, tenantId, createdBy, initialSlot, on
               supabase as unknown as Parameters<typeof fetchCanonicalRows>[0],
               entity,
             );
-          } catch {
-            // Non-fatal — proceed with empty canonical so the user can still
-            // see all source rows as "new". The fetch error is not surfaced to
-            // avoid confusion; canonical is optional in the demo context.
-            canonicalRows = [];
+          } catch (e) {
+            // A failed read must not look like "nothing exists yet" — that
+            // would offer to add every source row as new.
+            setStep({ tag: "error", message: e instanceof Error ? e.message : String(e) });
+            return;
           }
         }
 
@@ -194,6 +197,11 @@ export function ReconcileModule({ supabase, tenantId, createdBy, initialSlot, on
     }
 
     const { result, entity, sheet, scores } = step;
+
+    if (result.matchKeyUnavailable) {
+      setStep({ tag: "error", message: "Can't tell which of these rows already exist, so nothing was added." });
+      return;
+    }
 
     // Build rows to commit:
     //   - All onlyInSource rows (new additions)
@@ -435,6 +443,13 @@ function ReconcileReview({
           Matched on: <code>{result.matchKey}</code>
         </span>
       </div>
+
+      {result.matchKeyUnavailable && (
+        <div className="eq-reconcile__error" role="alert">
+          Can't compare: your role can't see <code>{result.matchKey}</code> on existing records, so
+          nothing could be matched. These rows may already exist — don't add them as new.
+        </div>
+      )}
 
       {/* Conflicts — expandable rows with field diffs */}
       {result.conflicts.length > 0 && (
