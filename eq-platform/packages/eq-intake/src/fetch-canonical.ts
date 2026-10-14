@@ -13,7 +13,7 @@
  */
 
 import { readEntityColumns } from "./read-entity-columns.js";
-import { ENTITY_COLUMNS, isEntityTable } from "./entity-columns.js";
+import { ENTITY_COLUMNS, PII_COLUMNS, isEntityTable } from "./entity-columns.js";
 import type { SupabaseLikeClient } from "./canonical/commit-canonical.js";
 
 // ---------------------------------------------------------------------------
@@ -86,4 +86,21 @@ export async function fetchCanonicalRows(
   }
 
   return (data as Record<string, unknown>[] | null) ?? [];
+}
+
+/**
+ * PII columns the RPC withheld from `rows` — the keys are absent, not null, for
+ * a viewer without entity.view_pii. Callers that match or score on these
+ * columns (duplicate detection, gap checks) should say so instead of reporting
+ * "none found". Empty when there are no rows to judge from.
+ */
+export function withheldPiiColumns(
+  entity: string,
+  rows: readonly Record<string, unknown>[],
+): string[] {
+  const table = entityToTable(entity);
+  if (!table || !isEntityTable(table) || rows.length === 0) return [];
+  const seen = new Set<string>();
+  for (const row of rows) for (const key of Object.keys(row)) seen.add(key);
+  return PII_COLUMNS[table].filter((c) => !seen.has(c));
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, type JSX } from "react";
 import {
   fetchCanonicalRows,
+  withheldPiiColumns,
   runTidyPass,
   commitTidyFixes,
   suggestGaps,
@@ -271,6 +272,7 @@ export function EntityDrillDown({
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hiddenPii, setHiddenPii] = useState<string[]>([]);
   const [refreshCounter, setRefreshCounter] = useState(0);
 
   // ── Flag-for-merge state (sites only) ──────────────────────────────────
@@ -363,7 +365,10 @@ export function EntityDrillDown({
 
       try {
         const data = await fetchCanonicalRows(supabase as unknown as CanonicalFetchClient, entity);
-        if (!cancelled) setRows(data.map((row) => deriveRow(entity, row)));
+        if (!cancelled) {
+          setRows(data.map((row) => deriveRow(entity, row)));
+          setHiddenPii(withheldPiiColumns(entity, data));
+        }
       } catch (err: unknown) {
         if (!cancelled)
           setError(err instanceof Error ? err.message : "Failed to load records.");
@@ -1317,6 +1322,12 @@ export function EntityDrillDown({
 
   return (
     <div className="eq-drill">
+      {hiddenPii.length > 0 && (
+        <div className="eq-drill__error" role="status">
+          Your role can't see {hiddenPii.join(", ").replace(/_/g, " ")}, so gap and duplicate
+          checks that use {hiddenPii.length === 1 ? "it" : "them"} are skipped here.
+        </div>
+      )}
       <div className="eq-drill__header">
         <div className="eq-drill__header-left">
           {onBack && (

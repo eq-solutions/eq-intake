@@ -33,3 +33,20 @@ describe("fetchCanonicalRows", () => {
     await expect(fetchCanonicalRows(client, "contacts")).rejects.toThrow(/fetchCanonicalRows\(contacts\): mock: contacts refused/);
   });
 });
+
+import { withheldPiiColumns } from "../src/fetch-canonical.js";
+
+describe("withheldPiiColumns", () => {
+  it("lists PII columns absent from the rows", async () => {
+    const { client } = fakeEntityRpc({ contacts });
+    const rows = await fetchCanonicalRows(client, "contacts");
+    expect(withheldPiiColumns("contacts", rows)).toEqual(["email", "work_phone", "mobile_phone", "fax", "notes"]);
+  });
+
+  it("is empty when the viewer can see PII, or there are no rows", async () => {
+    const { client } = fakeEntityRpc({ contacts }, { canViewPii: true });
+    expect(withheldPiiColumns("contacts", await fetchCanonicalRows(client, "contacts"))).toEqual([]);
+    expect(withheldPiiColumns("contacts", [])).toEqual([]);
+    expect(withheldPiiColumns("nonsense", [{ a: 1 }])).toEqual([]);
+  });
+});
