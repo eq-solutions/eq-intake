@@ -211,6 +211,9 @@ const SYSTEM_FIELDS = new Set([
   'parent_asset_id',
 ]);
 
+const isBlank = (v: unknown): boolean =>
+  v === null || v === undefined || (typeof v === 'string' && v.trim() === '');
+
 // ---------------------------------------------------------------------------
 // Per-entity tidy scan
 // ---------------------------------------------------------------------------
@@ -401,6 +404,11 @@ async function scanEntity(
     const rowId = stringify(original[pkField]);
     const label = rowLabel(original, entity);
 
+    // One gap per (row, field). An empty required string trips both
+    // field_required and a min-length rule; listing both shows the same cell
+    // twice. Keep the first error, except a blank cell reports as missing.
+    const gapIdxByField = new Map<string, number>();
+
     for (const e of rrow.errors) {
       const field = ('field' in e && e.field) || 'row';
       if (SYSTEM_FIELDS.has(field)) continue;
@@ -409,13 +417,23 @@ async function scanEntity(
       if (e.kind === 'field_required') gapType = 'required_missing';
       if (e.kind === 'fk_no_match')    gapType = 'fk_no_match';
 
-      gaps.push({
+      const gap: GapItem = {
         entity, table, row_id: rowId, row_label: label,
         field,
         gap_type: gapType,
         message:  describeValidationError(e),
         allowed_values: e.kind === 'field_enum_invalid' ? e.allowed : getFieldEnumValues(entity, field) ?? undefined,
-      });
+      };
+
+      const seen = gapIdxByField.get(field);
+      if (seen === undefined) {
+        gapIdxByField.set(field, gaps.length);
+        gaps.push(gap);
+      } else if (gapType === 'required_missing' && isBlank(original[field])) {
+        // Blank cell: "missing" is the real cause. For a non-blank value (e.g. an
+        // invalid enum) a stray required error must not hide the actual problem.
+        gaps[seen] = gap;
+      }
     }
   }
 
