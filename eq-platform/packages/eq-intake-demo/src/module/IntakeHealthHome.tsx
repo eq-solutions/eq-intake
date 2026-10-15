@@ -6,8 +6,7 @@ import {
   computeComplianceMetrics,
   detectAllDuplicates,
   decayCheck,
-  getFieldTier,
-  FIELD_IMPORTANCE,
+  buildOverviewWork,
 } from "@eq/intake";
 import type {
   HealthScore,
@@ -16,6 +15,8 @@ import type {
   DuplicateReport,
   DecaySummary,
   FieldImportanceOverride,
+  RecordSummary,
+  WorkItem,
 } from "@eq/intake";
 import type { SupabaseLikeClient } from "../canonical/commit-canonical.js";
 import { entityLabel, fieldLabel } from "../shared/entity-label.js";
@@ -59,194 +60,10 @@ interface OrphanSummary {
   total:                    number;
 }
 
-interface DimensionResult {
-  completeness:   number; // 0–1 — can we reach people (staff email + contacts on file)
-  compliance:     number; // 0–1 — SKS-specific: licence coverage + emergency contacts
-  serviceability: number; // 0–1 — SKS-specific: trade classification + sites on file
-  validity:       number; // 0–1 — DAMA "Validity": do populated fields pass format checks (ABN, phone, state, postcode)
-  consistency:    number; // 0–1 — DAMA "Consistency": referential integrity (no broken FK links)
-  timeliness:     number; // 0–1 — DAMA "Timeliness": records touched within the last year
-  composite:      number; // 0–100
-}
-
-interface ActionItem {
-  id:          string;
-  /** Entity this action's onClick should drill into. */
-  entity:      string;
-  /** Set only for field-gap actions (e.g. "phone") — lets the click open
-   * straight into a bulk-fill grid for that field. Unset for the two
-   * whole-record special cases (no licences / licences expiring). */
-  field?:      string;
-  title:       string;
-  description: string;
-  pts:         number;
-  severity:    "danger" | "warning" | "info";
-}
-
 /** Shared status vocabulary for every row in the unified checks list — one
  * colour language instead of the four slightly-different badge/fill/dot
  * palettes the previous layout accumulated across its five section types. */
 type RowStatus = "ok" | "warn" | "err" | "info" | "neutral";
-
-// ---------------------------------------------------------------------------
-// Score computation
-// ---------------------------------------------------------------------------
-
-// Below this many rows, a 100% (or 0%) score is a coin flip, not a trend —
-// flag it so a nearly-empty entity doesn't read as confidently as a big one.
-const LOW_SAMPLE_THRESHOLD = 5;
-
-// Averages only the components that have data behind them. An entity with
-// zero rows is "not started", not "fully complete" — it must not silently
-// inflate a dimension to 100% before anyone has entered a single record.
-function averageStarted(...components: Array<{ value: number; started: boolean } | null>): number {
-  const live = components.filter((c): c is { value: number; started: boolean } => c !== null && c.started);
-  if (live.length === 0) return 0;
-  return live.reduce((sum, c) => sum + c.value, 0) / live.length;
-}
-
-// Weights reflect SKS's consumption context (Soda's phrase for it): licence
-// coverage and dispatch-readiness carry real compliance/safety consequences,
-// so they outweigh general data hygiene. Validity and Timeliness were
-// computed by the underlying modules all along but never fed the composite
-// — see health-score.ts's module comment for the DAMA-UK framing.
-const WEIGHTS = {
-  compliance:     30,
-  serviceability: 25,
-  completeness:   15,
-  validity:       12,
-  consistency:    10,
-  timeliness:      8,
-} as const;
-
-function computeDimensions(
-  scores:    HealthScore[] | null,
-  licences:  LicenceExpiryAlertSummary | null,
-  orphans:   OrphanSummary | null,
-  cm:        ComplianceMetrics | null,
-): DimensionResult {
-  const st = cm?.staff.total ?? 0;
-  const contactsHs = scores?.find((s) => s.entity === "contacts") ?? null;
-  const sitesHs    = scores?.find((s) => s.entity === "sites") ?? null;
-
-  // has_email / has_emergency_contact are null when this viewer can't see
-  // those fields (no entity.view_pii) — left out of the average, not scored 0.
-  const hasEmail     = cm?.staff.has_email ?? null;
-  const hasEmergency = cm?.staff.has_emergency_contact ?? null;
-
-  // Completeness: staff email + contacts completeness (can we reach people)
-  const staffEmailRate = st > 0 && hasEmail !== null ? hasEmail / st : 0;
-  const completeness    = averageStarted(
-    { value: staffEmailRate, started: st > 0 && hasEmail !== null },
-    contactsHs ? { value: contactsHs.score, started: contactsHs.started } : null,
-  );
-
-  // Compliance: licence coverage (≥1 record per staff) + emergency contacts
-  const licenceRecords  = licences?.records_total ?? 0;
-  const licenceCoverage = st > 0 ? Math.min(1, licenceRecords / st) : 0;
-  const emergencyRate   = st > 0 && hasEmergency !== null ? hasEmergency / st : 0;
-  const compliance      = averageStarted(
-    { value: licenceCoverage, started: st > 0 },
-    { value: emergencyRate, started: st > 0 && hasEmergency !== null },
-  );
-
-  // Serviceability: trade classification + sites completeness
-  const tradeRate      = st > 0 ? (cm!.staff.has_trade / st) : 0;
-  const serviceability = averageStarted(
-    { value: tradeRate, started: st > 0 },
-    sitesHs ? { value: sitesHs.score, started: sitesHs.started } : null,
-  );
-
-  // Validity: average format-correctness across every entity that has data
-  const validity = averageStarted(
-    ...(scores ?? []).map((s) => ({ value: s.validity, started: s.started })),
-  );
-
-  // Timeliness: average freshness across every entity that has data
-  const timeliness = averageStarted(
-    ...(scores ?? []).map((s) => ({ value: s.freshness, started: s.started })),
-  );
-
-  // Consistency: orphan-free (referential integrity)
-  const orphanTotal = orphans?.total ?? 0;
-  const consistency  = orphanTotal === 0 ? 1 : Math.max(0, 1 - orphanTotal / 100);
-
-  const composite = Math.round(
-    compliance * WEIGHTS.compliance +
-    serviceability * WEIGHTS.serviceability +
-    completeness * WEIGHTS.completeness +
-    validity * WEIGHTS.validity +
-    consistency * WEIGHTS.consistency +
-    timeliness * WEIGHTS.timeliness,
-  );
-
-  return { completeness, compliance, serviceability, validity, consistency, timeliness, composite };
-}
-
-// Points-per-tier for sorting/display only — unrelated to the composite
-// score's WEIGHTS above (those are per-dimension; this just orders which
-// gaps surface first in the action list, critical always before important).
-const ACTION_PTS: Record<"critical" | "important", number> = { critical: 15, important: 5 };
-
-function deriveActions(
-  scores:    HealthScore[] | null,
-  licences:  LicenceExpiryAlertSummary | null,
-  cm:        ComplianceMetrics | null,
-  overrides?: FieldImportanceOverride[],
-): ActionItem[] {
-  const actions: ActionItem[] = [];
-  const st = cm?.staff.total ?? 0;
-
-  // Two special cases the rulebook doesn't model — not "is this field blank
-  // on an existing row" but "does the whole record exist at all" and "is
-  // this a time-sensitive expiry," respectively.
-  if (st > 0 && (licences?.records_total ?? 0) === 0) {
-    actions.push({
-      id:          "no_licences",
-      entity:      "licences",
-      title:       `${st} active staff — no licence records on file`,
-      description: "White cards, yellow cards, electrical licences are all untracked.",
-      pts:         25,
-      severity:    "danger",
-    });
-  }
-
-  if ((licences?.total ?? 0) > 0) {
-    actions.push({
-      id:          "expiring",
-      entity:      "licences",
-      title:       `${licences!.total} licence${licences!.total === 1 ? "" : "s"} expiring within 60 days`,
-      description: `${licences!.critical > 0 ? `${licences!.critical} expired or critical. ` : ""}Renewal required before deployment.`,
-      pts:         20,
-      severity:    licences!.critical > 0 ? "danger" : "warning",
-    });
-  }
-
-  // Everything else comes straight from the rulebook — a field's tier and
-  // "why" only ever need to change in field-importance.ts to change what
-  // shows up here, across every entity, not just staff.
-  for (const hs of scores ?? []) {
-    if (!hs.started) continue;
-    for (const field of hs.gaps) {
-      const count = hs.gapCounts[field] ?? 0;
-      if (count === 0) continue;
-      const tier = getFieldTier(hs.entity, field, overrides);
-      if (tier !== "critical" && tier !== "important") continue;
-      const why = FIELD_IMPORTANCE[hs.entity]?.find((e) => e.field === field)?.why ?? "";
-      actions.push({
-        id:          `${hs.entity}.${field}`,
-        entity:      hs.entity,
-        field,
-        title:       `${count} of ${hs.total} ${entityLabel(hs.entity).toLowerCase()} missing ${fieldLabel(field)}`,
-        description: why,
-        pts:         ACTION_PTS[tier],
-        severity:    tier === "critical" ? "danger" : "warning",
-      });
-    }
-  }
-
-  return actions.sort((a, b) => b.pts - a.pts).slice(0, 4);
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -256,99 +73,9 @@ function pct(score: number): string {
   return `${Math.round(score * 100)}%`;
 }
 
-function statusLabel(composite: number): string {
-  if (composite >= 85) return "Good";
-  if (composite >= 60) return "Fair";
-  if (composite >= 40) return "Needs attention";
-  return "Gaps present";
-}
-
-function ringColour(composite: number): string {
-  if (composite >= 85) return "var(--eq-ok)";
-  if (composite >= 60) return "var(--eq-sky)";
-  if (composite >= 40) return "var(--eq-warn)";
-  return "var(--eq-err)";
-}
-
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function ScoreRing({ composite }: { composite: number }): JSX.Element {
-  const r = 40;
-  const circ = 2 * Math.PI * r;
-  const offset = circ * (1 - composite / 100);
-  const colour = ringColour(composite);
-  const label  = statusLabel(composite);
-
-  return (
-    <div className="eq-health-ring-wrap">
-      <div className="eq-health-ring-svg">
-        <svg width="96" height="96" viewBox="0 0 96 96" fill="none" aria-hidden="true">
-          <circle cx="48" cy="48" r={r} stroke="var(--eq-line)" strokeWidth="7" />
-          <circle
-            cx="48" cy="48" r={r}
-            stroke={colour}
-            strokeWidth="7"
-            strokeLinecap="round"
-            strokeDasharray={circ}
-            strokeDashoffset={offset}
-            transform="rotate(-90 48 48)"
-          />
-        </svg>
-        <div className="eq-health-ring-inner">
-          <span className="eq-health-ring-num">{composite}</span>
-          <span className="eq-health-ring-sub">/100</span>
-        </div>
-      </div>
-      <span className="eq-health-ring-status" style={{ color: colour }}>{label}</span>
-    </div>
-  );
-}
-
-function DimensionBar({
-  label, score, weight, title,
-}: { label: string; score: number; weight: string; title?: string }): JSX.Element {
-  const fillClass = score >= 0.8 ? "eq-health-dim-fill--ok" : score >= 0.5 ? "eq-health-dim-fill--warn" : "eq-health-dim-fill--err";
-  return (
-    <div className="eq-health-dim">
-      <span className="eq-health-dim-name" title={title}>
-        {label}
-        <span className="eq-health-dim-weight">{weight}</span>
-      </span>
-      <div className="eq-health-dim-track">
-        <div
-          className={`eq-health-dim-fill ${fillClass}`}
-          style={{ width: pct(score) } as React.CSSProperties}
-        />
-      </div>
-      <span className="eq-health-dim-pct">{pct(score)}</span>
-    </div>
-  );
-}
-
-function ActionCard({
-  action, onEntityClick,
-}: { action: ActionItem; onEntityClick?: (entity: string, field?: string) => void }): JSX.Element {
-  return (
-    <button
-      type="button"
-      className={`eq-health-action eq-health-action--${action.severity}`}
-      onClick={onEntityClick ? () => onEntityClick(action.entity, action.field) : undefined}
-    >
-      <div className={`eq-health-action-icon eq-health-action-icon--${action.severity}`} aria-hidden="true">
-        {action.severity === "danger" ? "!" : "→"}
-      </div>
-      <div className="eq-health-action-body">
-        <p className="eq-health-action-title">{action.title}</p>
-        <p className="eq-health-action-sub">{action.description}</p>
-      </div>
-      <span className={`eq-health-action-badge eq-health-action-badge--${action.severity}`}>
-        +{action.pts} pts
-      </span>
-    </button>
-  );
-}
 
 /**
  * One row in the unified checks list. Every entity-completeness row and
@@ -471,32 +198,6 @@ function EntityBadge({
   );
 }
 
-function orphanDetail(
-  summary: OrphanSummary, onEntityClick?: (entity: string) => void,
-): ReactNode {
-  const items: Array<{ count: number; entity: string; label: string }> = [
-    { count: summary.assets_no_site_count,     entity: "assets",   label: `asset${summary.assets_no_site_count !== 1 ? "s" : ""} missing site` },
-    { count: summary.contacts_no_parent_count, entity: "contacts", label: `contact${summary.contacts_no_parent_count !== 1 ? "s" : ""} unlinked` },
-    { count: summary.licences_no_staff_count,  entity: "licences", label: `licence${summary.licences_no_staff_count !== 1 ? "s" : ""} missing staff` },
-    { count: summary.sites_no_customer_count,  entity: "sites",    label: `site${summary.sites_no_customer_count !== 1 ? "s" : ""} missing customer` },
-  ].filter((i) => i.count > 0);
-
-  return (
-    <>
-      {items.map((i) => (
-        <EntityBadge
-          key={i.entity}
-          text={`${i.count} ${i.label}`}
-          cls="eq-health-badge--warning"
-          title={`Open ${i.entity} drill-down`}
-          entity={i.entity}
-          onEntityClick={onEntityClick}
-        />
-      ))}
-    </>
-  );
-}
-
 function duplicateDetail(
   report: DuplicateReport[], onEntityClick?: (entity: string) => void,
 ): ReactNode {
@@ -569,66 +270,93 @@ function decayDetail(
 }
 
 function recordRow(
-  hs: HealthScore, overrides: FieldImportanceOverride[] | undefined, onEntityClick: ((entity: string, field?: string) => void) | undefined,
+  r: RecordSummary, onEntityClick: ((entity: string, field?: string) => void) | undefined,
 ): ReactNode {
-  const label = entityLabel(hs.entity);
+  const label = entityLabel(r.entity);
 
-  if (!hs.started) {
+  if (!r.started) {
     return (
       <CheckRow
-        key={hs.entity}
+        key={r.entity}
         status="neutral"
         label={label}
         meta="0 records"
         summary="Not started"
-        detail="Not counted in the health score yet."
-        onClick={onEntityClick ? () => onEntityClick(hs.entity) : undefined}
+        onClick={onEntityClick ? () => onEntityClick(r.entity) : undefined}
         ariaLabel={`${label} — no records yet`}
       />
     );
   }
 
-  const lowSample  = hs.total < LOW_SAMPLE_THRESHOLD;
-  const status: RowStatus = hs.score >= 0.9 ? "ok" : hs.score >= 0.7 ? "warn" : "err";
-  const percentage = pct(hs.score);
-  const detail = (hs.gaps.length > 0 || lowSample) && (
+  // Never "complete" while anything is missing: the status and words come from
+  // what is actually left to fix, not from a percentage.
+  const status: RowStatus =
+    r.toFix > 0 ? (r.gaps.some((g) => g.tier === "critical") ? "err" : "warn")
+    : r.partlyChecked ? "neutral" : "ok";
+  const summary = r.partlyChecked ? "Partly checked" : r.toFix === 0 ? "Nothing to fix" : `${r.toFix} to fix`;
+
+  const detail = (r.gaps.length > 0 || r.partlyChecked) && (
     <>
-      {lowSample && (
-        <p className="eq-health-card__low-sample">
-          Based on only {hs.total} record{hs.total === 1 ? "" : "s"} — treat this score as unproven.
-        </p>
-      )}
-      {hs.gaps.length > 0 && (
+      {r.gaps.length > 0 && (
         <div className="eq-health-card__gaps">
           <span className="eq-health-card__gaps-label">Missing:</span>
-          {hs.gaps.map((field) => {
-            const tier = getFieldTier(hs.entity, field, overrides);
-            const tierClass = tier === "critical" ? "eq-health-badge--critical" : "eq-health-badge--warning";
-            return (
-              <span key={field} className={`eq-health-badge ${tierClass}`}>
-                {fieldLabel(field)}
-              </span>
-            );
-          })}
+          {r.gaps.map((g) => (
+            <span
+              key={g.field}
+              className={`eq-health-badge ${g.tier === "critical" ? "eq-health-badge--critical" : "eq-health-badge--warning"}`}
+            >
+              {fieldLabel(g.field)} · {g.count}
+            </span>
+          ))}
         </div>
+      )}
+      {r.partlyChecked && (
+        <p className="eq-health-card__low-sample">Some checks are skipped for your role.</p>
       )}
     </>
   );
 
   return (
     <CheckRow
-      key={hs.entity}
+      key={r.entity}
       status={status}
       label={label}
-      meta={`${hs.total.toLocaleString()} record${hs.total === 1 ? "" : "s"}`}
-      summary={percentage}
-      progress={hs.score}
+      meta={`${r.total.toLocaleString()} record${r.total === 1 ? "" : "s"}`}
+      summary={summary}
       detail={detail || undefined}
-      onClick={onEntityClick ? () => onEntityClick(hs.entity) : undefined}
-      ariaLabel={`${label} — ${percentage} complete${lowSample ? `, based on only ${hs.total} record${hs.total === 1 ? "" : "s"}` : ""}`}
+      onClick={onEntityClick ? () => onEntityClick(r.entity) : undefined}
+      ariaLabel={`${label} — ${summary}`}
     />
   );
 }
+
+function WorkRow({
+  item, onEntityClick,
+}: { item: WorkItem; onEntityClick?: (entity: string, field?: string) => void }): JSX.Element {
+  return (
+    <div className="eq-work-row">
+      <div className="eq-work-row__main">
+        <p className="eq-work-row__title">
+          {item.title}
+          {item.tag && (
+            <span className={`eq-work-tag eq-work-tag--${item.tag.tone}`}>{item.tag.text}</span>
+          )}
+        </p>
+        <p className="eq-work-row__detail">{item.detail}</p>
+      </div>
+      <button
+        type="button"
+        className="eq-intake-btn-ghost eq-work-row__btn"
+        onClick={onEntityClick ? () => onEntityClick(item.entity, item.field) : undefined}
+        disabled={!onEntityClick}
+      >
+        {item.actionLabel}
+      </button>
+    </div>
+  );
+}
+
+const WORK_VISIBLE = 6;
 
 // ---------------------------------------------------------------------------
 // Root component
@@ -771,8 +499,11 @@ export function IntakeHealthHome({
     );
   }
 
-  const dims    = computeDimensions(scores, licences, orphans, compliance);
-  const actions = deriveActions(scores, licences, compliance, fieldImportanceOverrides);
+  const work = buildOverviewWork({
+    scores, licences, compliance, orphans, dupes,
+    overrides: fieldImportanceOverrides,
+    labels: { entity: entityLabel, field: fieldLabel },
+  });
 
   const scanDuplicates = async () => {
     if (!supabase || dupesBusy) return;
@@ -801,48 +532,6 @@ export function IntakeHealthHome({
       setDecayBusy(false);
     }
   };
-
-  // ---- licences row -------------------------------------------------------
-  let licenceRow: ReactNode = null;
-  if (licences) {
-    if (licences.records_total === 0) {
-      licenceRow = (
-        <CheckRow status="err" label="Licences" summary="No licence data — 0 records" />
-      );
-    } else if (licences.total === 0) {
-      licenceRow = (
-        <CheckRow status="ok" label="Licences" summary={`All ${licences.records_total.toLocaleString()} current`} />
-      );
-    } else {
-      const parts = [
-        licences.critical > 0 ? `${licences.critical} expired/critical` : null,
-        licences.warning  > 0 ? `${licences.warning} expiring soon`     : null,
-        licences.info     > 0 ? `${licences.info} within 60 days`       : null,
-      ].filter(Boolean).join(" · ");
-      licenceRow = (
-        <CheckRow
-          status={licences.critical > 0 ? "err" : licences.warning > 0 ? "warn" : "info"}
-          label="Licences"
-          summary={parts}
-        />
-      );
-    }
-  }
-
-  // ---- broken links (orphans) row -----------------------------------------
-  let orphanRow: ReactNode = null;
-  if (orphans) {
-    orphanRow = orphans.total === 0 ? (
-      <CheckRow status="ok" label="Broken links" summary="None found" />
-    ) : (
-      <CheckRow
-        status="warn"
-        label="Broken links"
-        summary={`${orphans.total} to fix`}
-        detail={orphanDetail(orphans, onEntityClick)}
-      />
-    );
-  }
 
   // ---- duplicates row -------------------------------------------------------
   const dupeTotal = dupes?.reduce((n, r) => n + r.clusters.length, 0) ?? 0;
@@ -888,13 +577,20 @@ export function IntakeHealthHome({
     />
   );
 
+  const shown = work.items.slice(0, WORK_VISIBLE);
+  const more  = work.items.slice(WORK_VISIBLE);
+  const split = [
+    work.byKind.quick_edit > 0 && `${work.byKind.quick_edit} quick ${work.byKind.quick_edit === 1 ? "edit" : "edits"}`,
+    work.byKind.person > 0     && `${work.byKind.person} need a person`,
+    work.byKind.decide > 0     && `${work.byKind.decide} to decide`,
+  ].filter(Boolean).join(" · ");
+  const notChecked = dupes === null || decay === null;
+
   return (
     <section className="eq-health-home">
 
-      {/* Re-runs the load effect on demand — the scores/counts below go stale
-          after adjudicating, merging, or approving a queue item elsewhere,
-          and the only other way to see updated ones is leaving this tab and
-          coming back. */}
+      {/* Re-runs the load effect on demand: the counts below go stale after
+          adjudicating, merging, or approving a queue item elsewhere. */}
       <div className="eq-health-refresh-row">
         <button
           type="button"
@@ -906,69 +602,73 @@ export function IntakeHealthHome({
         </button>
       </div>
 
-      {/* The checks run in parallel (Promise.allSettled) and already tolerate
-          each other failing independently — so each section below reveals
-          itself as its own data lands instead of waiting behind one big
-          spinner for the slowest of them. */}
       {loading && <p className="eq-health-loading-hint">Still checking a few things…</p>}
 
-      {/* Composite score + 6 dimensions — the one headline number, with the
-          "why" tucked behind a disclosure instead of six bars up front. */}
-      <div className="eq-health-top">
-        {scores !== null ? (
-          <>
-            <ScoreRing composite={dims.composite} />
-            <details className="eq-health-dims-disclosure">
-              <summary>Show the breakdown</summary>
-              <div className="eq-health-dims">
-                <DimensionBar label="Compliance"        score={dims.compliance}     weight={`${WEIGHTS.compliance}%`} />
-                <DimensionBar label="Ready to dispatch"  score={dims.serviceability} weight={`${WEIGHTS.serviceability}%`} title="Serviceability" />
-                <DimensionBar label="Can we reach people" score={dims.completeness}  weight={`${WEIGHTS.completeness}%`} title="Completeness" />
-                <DimensionBar label="Correctly formatted" score={dims.validity}      weight={`${WEIGHTS.validity}%`} title="Validity" />
-                <DimensionBar label="Records linked up"   score={dims.consistency}   weight={`${WEIGHTS.consistency}%`} title="Consistency" />
-                <DimensionBar label="Recently updated"    score={dims.timeliness}    weight={`${WEIGHTS.timeliness}%`} title="Timeliness" />
-              </div>
-            </details>
-          </>
-        ) : (
-          <div className="eq-health-loading">Checking your data…</div>
-        )}
-      </div>
-
-      {/* Action queue — the top 4 highest-impact gaps. Left exactly as-is:
-          already the clearest part of the old layout. */}
-      {actions.length > 0 && (
-        <div className="eq-health-actions">
-          <span className="eq-health-section-label">
-            Fix these to improve your score
-          </span>
-          {actions.map((a) => (
-            <ActionCard key={a.id} action={a} onEntityClick={onEntityClick} />
-          ))}
+      {work.skipped.length > 0 && (
+        <div className="eq-work-banner" role="status">
+          <strong>Some checks are skipped.</strong> Your role can't see {work.skipped.join(", ")}, so
+          those checks are left out of every count. Ask an admin if you need access.
         </div>
       )}
 
-      {/* Your records — what used to be a 5-card grid is now 5 rows in the
-          same list language the checks below use. */}
-      {scores !== null && (
-        <div className="eq-health-list-section">
-          <span className="eq-health-section-label">Your records</span>
-          <div className="eq-health-list">
-            {scores.map((hs) => recordRow(hs, fieldImportanceOverrides, onEntityClick))}
+      {scores === null ? (
+        <div className="eq-health-loading">Checking your data…</div>
+      ) : (
+        <div className="eq-work-top">
+          <div className="eq-work-headline">
+            <span className="eq-work-headline__num">{work.total.toLocaleString()}</span>
+            <span className="eq-work-headline__label">
+              {work.total === 1 ? "thing left to fix" : "things left to fix"}
+            </span>
           </div>
+          <p className="eq-work-sub">
+            {work.total === 0
+              ? (notChecked
+                  ? "Nothing left from the checks that ran. Duplicates and record age aren't checked yet."
+                  : "Nothing left to fix.")
+              : split}
+          </p>
+          <p className="eq-work-note">
+            Counts missing details and licences due. Possible duplicates are added after a scan.
+          </p>
         </div>
       )}
 
-      {/* Data quality checks — licences, broken links, duplicates, record age.
-          Previously four separately-headed strips with their own visual
-          rhythm; now four rows in the same list as the records above. */}
-      <div className="eq-health-list-section">
-        <span className="eq-health-section-label">Data quality checks</span>
-        <div className="eq-health-list">
-          {licenceRow}
-          {orphanRow}
-          {duplicatesRow}
-          {recordAgeRow}
+      <div className="eq-work-layout">
+        <div className="eq-work-main">
+          {work.items.length > 0 && (
+            <div className="eq-health-list-section">
+              <span className="eq-health-section-label">Needs you · ranked by risk</span>
+              <div className="eq-work-list">
+                {shown.map((it) => <WorkRow key={it.id} item={it} onEntityClick={onEntityClick} />)}
+                {more.length > 0 && (
+                  <details className="eq-work-more">
+                    <summary>Show {more.length} more</summary>
+                    {more.map((it) => <WorkRow key={it.id} item={it} onEntityClick={onEntityClick} />)}
+                  </details>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="eq-work-side">
+          {scores !== null && (
+            <div className="eq-health-list-section">
+              <span className="eq-health-section-label">Your records</span>
+              <div className="eq-health-list">
+                {work.records.map((r) => recordRow(r, onEntityClick))}
+              </div>
+            </div>
+          )}
+
+          <div className="eq-health-list-section">
+            <span className="eq-health-section-label">Not checked yet</span>
+            <div className="eq-health-list">
+              {duplicatesRow}
+              {recordAgeRow}
+            </div>
+          </div>
         </div>
       </div>
 
