@@ -121,6 +121,32 @@ describe("runTidyPass — required-field gaps", () => {
   });
 });
 
+describe("runTidyPass — one gap per record and field", () => {
+  it("lists an empty required string once, as required_missing, not also as 'too short'", async () => {
+    const client = fakeClient([
+      { staff_id: "s-1", tenant_id: TENANT, first_name: "Tom", last_name: "", employment_type: "full_time", active: true },
+    ]);
+
+    const report = await runTidyPass({ supabase: client, tenantId: TENANT, entities: ["staff"] });
+    const forField = report.gaps.filter((g) => g.row_id === "s-1" && g.field === "last_name");
+
+    expect(forField).toHaveLength(1);
+    expect(forField[0]!.gap_type).toBe("required_missing");
+  });
+
+  it("never reports the same (row, field) twice across a scan", async () => {
+    const client = fakeClient([
+      { staff_id: "s-1", tenant_id: TENANT, first_name: "", last_name: "", employment_type: null, active: true },
+      { staff_id: "s-2", tenant_id: TENANT, first_name: "Ann", last_name: "", employment_type: "full_time", active: true },
+    ]);
+
+    const report = await runTidyPass({ supabase: client, tenantId: TENANT, entities: ["staff"] });
+    const keys = report.gaps.map((g) => `${g.row_id}|${g.field}`);
+
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
 describe("runTidyPass — assets (no silent skip)", () => {
   function fakeAssetClient(assetRows: Record<string, unknown>[]): SupabaseLikeClient {
     return fakeEntityRpc({ assets: assetRows }).client;
