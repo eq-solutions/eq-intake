@@ -580,38 +580,6 @@ create index if not exists quote_attachment_tenant_id_idx on quote_attachment(te
 create index if not exists quote_attachment_quote_id_idx on quote_attachment(quote_id);
 alter table quote_attachment enable row level security;
 
--- ----- quote_email_outbox -----
-create table if not exists quote_email_outbox (
-  outbox_id uuid,
-  tenant_id uuid,
-  quote_id uuid not null,
-  to_email text not null,
-  to_name text,
-  cc_emails jsonb,
-  bcc_emails jsonb,
-  subject text not null,
-  body_html text,
-  body_text text,
-  attachment_ids jsonb,
-  status text not null default 'queued' check (status is null or status in ('queued', 'sending', 'sent', 'failed', 'cancelled')),
-  queued_at timestamptz,
-  sent_at timestamptz,
-  failed_at timestamptz,
-  error_message text,
-  attempt_count bigint default 0,
-  imported_at timestamptz,
-  imported_from text,
-  intake_id uuid,
-  schema_version text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  created_by uuid,
-  updated_by uuid
-);
-create index if not exists quote_email_outbox_tenant_id_idx on quote_email_outbox(tenant_id);
-create index if not exists quote_email_outbox_quote_id_idx on quote_email_outbox(quote_id);
-alter table quote_email_outbox enable row level security;
-
 -- ----- quote_line_item -----
 create table if not exists quote_line_item (
   line_item_id uuid,
@@ -702,30 +670,6 @@ create index if not exists quote_contact_id_idx on quote(contact_id);
 create index if not exists quote_site_id_idx on quote(site_id);
 alter table quote enable row level security;
 
--- ----- rate_library -----
-create table if not exists rate_library (
-  rate_id uuid,
-  tenant_id uuid,
-  code text,
-  description text not null,
-  category text check (category is null or category in ('labour', 'material', 'equipment', 'subcontractor', 'other')),
-  unit varchar(16),
-  unit_cost_cents bigint default 0,
-  unit_sell_cents bigint default 0,
-  margin_pct numeric,
-  active boolean default true,
-  imported_at timestamptz,
-  imported_from text,
-  intake_id uuid,
-  schema_version text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  created_by uuid,
-  updated_by uuid
-);
-create index if not exists rate_library_tenant_id_idx on rate_library(tenant_id);
-alter table rate_library enable row level security;
-
 -- ----- rotation -----
 create table if not exists rotations (
   rotation_id uuid primary key default gen_random_uuid(),
@@ -807,27 +751,6 @@ create index if not exists schedule_entries_staff_id_idx on schedule_entries(sta
 create index if not exists schedule_entries_site_id_idx on schedule_entries(site_id);
 create index if not exists schedule_entries_supervisor_id_idx on schedule_entries(supervisor_id);
 alter table schedule_entries enable row level security;
-
--- ----- scope_template -----
-create table if not exists scope_template (
-  template_id uuid,
-  tenant_id uuid,
-  name varchar(100) not null,
-  category varchar(60),
-  body text not null,
-  sort_order bigint default 0,
-  active boolean default true,
-  imported_at timestamptz,
-  imported_from text,
-  intake_id uuid,
-  schema_version text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  created_by uuid,
-  updated_by uuid
-);
-create index if not exists scope_template_tenant_id_idx on scope_template(tenant_id);
-alter table scope_template enable row level security;
 
 -- ----- site_diary -----
 create table if not exists site_diaries (
@@ -1002,27 +925,6 @@ create table if not exists swms (
 create index if not exists swms_tenant_id_idx on swms(tenant_id);
 create index if not exists swms_site_id_idx on swms(site_id);
 alter table swms enable row level security;
-
--- ----- tafe_calendar -----
-create table if not exists tafe_calendars (
-  tafe_calendar_id uuid primary key default gen_random_uuid(),
-  tenant_id uuid,
-  year bigint not null,
-  trade text,
-  year_level bigint,
-  term_dates jsonb,
-  public_holidays jsonb,
-  imported_at timestamptz,
-  imported_from text,
-  intake_id uuid,
-  schema_version text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  created_by uuid,
-  updated_by uuid
-);
-create index if not exists tafe_calendars_tenant_id_idx on tafe_calendars(tenant_id);
-alter table tafe_calendars enable row level security;
 
 -- ----- tenant_app_config -----
 create table if not exists tenant_app_configs (
@@ -1389,12 +1291,6 @@ alter table quote_attachment add constraint quote_attachment_quote_id_fk foreign
 alter table quote_attachment drop constraint if exists quote_attachment_doc_type_enum_check;
 alter table quote_attachment add constraint quote_attachment_doc_type_enum_check check (doc_type is null or doc_type in ('docx', 'pdf', 'image', 'other'));
 
--- FKs for quote_email_outbox
-alter table quote_email_outbox drop constraint if exists quote_email_outbox_quote_id_fk;
-alter table quote_email_outbox add constraint quote_email_outbox_quote_id_fk foreign key (quote_id) references quote(quote_id);
-alter table quote_email_outbox drop constraint if exists quote_email_outbox_status_enum_check;
-alter table quote_email_outbox add constraint quote_email_outbox_status_enum_check check (status is null or status in ('queued', 'sending', 'sent', 'failed', 'cancelled'));
-
 -- FKs for quote_line_item
 alter table quote_line_item drop constraint if exists quote_line_item_quote_id_fk;
 alter table quote_line_item add constraint quote_line_item_quote_id_fk foreign key (quote_id) references quote(quote_id);
@@ -1418,10 +1314,6 @@ alter table quote drop constraint if exists quote_site_id_fk;
 alter table quote add constraint quote_site_id_fk foreign key (site_id) references sites(site_id);
 alter table quote drop constraint if exists quote_status_enum_check;
 alter table quote add constraint quote_status_enum_check check (status is null or status in ('draft', 'sent', 'accepted', 'rejected', 'expired', 'superseded'));
-
--- FKs for rate_library
-alter table rate_library drop constraint if exists rate_library_category_enum_check;
-alter table rate_library add constraint rate_library_category_enum_check check (category is null or category in ('labour', 'material', 'equipment', 'subcontractor', 'other'));
 
 -- FKs for rotation
 alter table rotations drop constraint if exists rotations_apprentice_profile_id_fk;
@@ -7686,44 +7578,6 @@ on conflict (entity, version) do update set
   module = excluded.module;
 
 insert into eq_schema_registry (entity, module, version, schema_json, description, is_current)
-values ('quote_email_outbox', 'quotes', '1.0.0', '{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.eq.solutions/quotes/quote-email-outbox/v1.json",
-  "title": "Quote Email Outbox",
-  "description": "Outbound email queue for quote-related emails (sender daemon consumes — Resend/SendGrid).",
-  "type": "object",
-  "x-eq-entity": "quote_email_outbox",
-  "x-eq-module": "quotes",
-  "x-eq-version": "1.0.0",
-  "x-eq-table": "quote_email_outbox",
-  "required": ["outbox_id", "tenant_id", "quote_id", "to_email", "subject", "status"],
-  "properties": {
-    "outbox_id": { "type": "string", "format": "uuid", "x-eq-required-on-import": false },
-    "tenant_id": { "type": "string", "format": "uuid", "x-eq-system-managed": true },
-    "quote_id": { "type": "string", "format": "uuid", "x-eq-foreign-key": "quote.quote_id" },
-    "to_email": { "type": "string", "format": "email" },
-    "to_name": { "type": ["string", "null"] },
-    "cc_emails": { "type": ["array", "null"], "items": { "type": "string", "format": "email" } },
-    "bcc_emails": { "type": ["array", "null"], "items": { "type": "string", "format": "email" } },
-    "subject": { "type": "string" },
-    "body_html": { "type": ["string", "null"] },
-    "body_text": { "type": ["string", "null"] },
-    "attachment_ids": { "type": ["array", "null"], "items": { "type": "string", "format": "uuid" } },
-    "status": { "type": "string", "default": "queued", "enum": ["queued", "sending", "sent", "failed", "cancelled"] },
-    "queued_at": { "type": ["string", "null"], "format": "date-time" },
-    "sent_at": { "type": ["string", "null"], "format": "date-time" },
-    "failed_at": { "type": ["string", "null"], "format": "date-time" },
-    "error_message": { "type": ["string", "null"] },
-    "attempt_count": { "type": "integer", "default": 0, "minimum": 0 }
-  }
-}
-'::jsonb, 'Outbound email queue for quote-related emails (sender daemon consumes — Resend/SendGrid).', true)
-on conflict (entity, version) do update set
-  schema_json = excluded.schema_json,
-  description = excluded.description,
-  module = excluded.module;
-
-insert into eq_schema_registry (entity, module, version, schema_json, description, is_current)
 values ('quote_line_item', 'quotes', '1.0.0', '{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.eq.solutions/quotes/quote-line-item/v1.json",
@@ -7844,37 +7698,6 @@ values ('quote', 'quotes', '1.0.0', '{
   }
 }
 '::jsonb, 'A customer quote (proposal). Header-level. Line items live in quote_line_item. Money in cents (bigint); quantities in thousandths.', true)
-on conflict (entity, version) do update set
-  schema_json = excluded.schema_json,
-  description = excluded.description,
-  module = excluded.module;
-
-insert into eq_schema_registry (entity, module, version, schema_json, description, is_current)
-values ('rate_library', 'quotes', '1.0.0', '{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.eq.solutions/quotes/rate-library/v1.json",
-  "title": "Rate Library Entry",
-  "description": "Curated rate library: labour, material, equipment, subcontractor rates. Money in cents.",
-  "type": "object",
-  "x-eq-entity": "rate_library",
-  "x-eq-module": "quotes",
-  "x-eq-version": "1.0.0",
-  "x-eq-table": "rate_library",
-  "required": ["rate_id", "tenant_id", "description"],
-  "properties": {
-    "rate_id": { "type": "string", "format": "uuid", "x-eq-required-on-import": false },
-    "tenant_id": { "type": "string", "format": "uuid", "x-eq-system-managed": true },
-    "code": { "type": ["string", "null"], "description": "Lookup code / SKU. Unique per tenant if set." },
-    "description": { "type": "string", "minLength": 1 },
-    "category": { "type": ["string", "null"], "enum": ["labour", "material", "equipment", "subcontractor", "other", null] },
-    "unit": { "type": ["string", "null"], "maxLength": 16 },
-    "unit_cost_cents": { "type": "integer", "minimum": 0, "default": 0 },
-    "unit_sell_cents": { "type": "integer", "minimum": 0, "default": 0 },
-    "margin_pct": { "type": ["number", "null"] },
-    "active": { "type": "boolean", "default": true }
-  }
-}
-'::jsonb, 'Curated rate library: labour, material, equipment, subcontractor rates. Money in cents.', true)
 on conflict (entity, version) do update set
   schema_json = excluded.schema_json,
   description = excluded.description,
@@ -8108,34 +7931,6 @@ values ('schedule', 'field', '1.0.0', '{
   }
 }
 '::jsonb, 'A planned allocation of a staff member to a site for a given day. The atomic unit of EQ Field scheduling.', true)
-on conflict (entity, version) do update set
-  schema_json = excluded.schema_json,
-  description = excluded.description,
-  module = excluded.module;
-
-insert into eq_schema_registry (entity, module, version, schema_json, description, is_current)
-values ('scope_template', 'quotes', '1.0.0', '{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.eq.solutions/quotes/scope-template/v1.json",
-  "title": "Scope Template",
-  "description": "Reusable scope-of-work phrase. Used in the Quotes UI''s scope dropdown. Tenant-scoped library.",
-  "type": "object",
-  "x-eq-entity": "scope_template",
-  "x-eq-module": "quotes",
-  "x-eq-version": "1.0.0",
-  "x-eq-table": "scope_template",
-  "required": ["template_id", "tenant_id", "name", "body"],
-  "properties": {
-    "template_id": { "type": "string", "format": "uuid", "x-eq-required-on-import": false },
-    "tenant_id": { "type": "string", "format": "uuid", "x-eq-system-managed": true },
-    "name": { "type": "string", "description": "Short label shown in the dropdown.", "maxLength": 100 },
-    "category": { "type": ["string", "null"], "maxLength": 60 },
-    "body": { "type": "string", "description": "The actual scope phrase, inserted into the quote." },
-    "sort_order": { "type": "integer", "default": 0 },
-    "active": { "type": "boolean", "default": true }
-  }
-}
-'::jsonb, 'Reusable scope-of-work phrase. Used in the Quotes UI''s scope dropdown. Tenant-scoped library.', true)
 on conflict (entity, version) do update set
   schema_json = excluded.schema_json,
   description = excluded.description,
@@ -8889,34 +8684,6 @@ values ('swms', 'cards', '1.0.0', '{
   ]
 }
 '::jsonb, 'An SWMS captured for a high-risk construction work activity, per WHS Regulation 2017 (NSW) and equivalents. Lands in this canonical form whether captured via EQ Cards (mobile), EQ Import (existing register), or EQ Capture (paper/PDF).', true)
-on conflict (entity, version) do update set
-  schema_json = excluded.schema_json,
-  description = excluded.description,
-  module = excluded.module;
-
-insert into eq_schema_registry (entity, module, version, schema_json, description, is_current)
-values ('tafe_calendar', 'field', '1.0.0', '{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.eq.solutions/field/tafe-calendar/v1.json",
-  "title": "TAFE Calendar",
-  "description": "TAFE term dates + public holidays per trade/year. Drives apprentice rostering avoidance.",
-  "type": "object",
-  "x-eq-entity": "tafe_calendar",
-  "x-eq-module": "field",
-  "x-eq-version": "1.0.0",
-  "x-eq-table": "tafe_calendars",
-  "required": ["tafe_calendar_id", "tenant_id", "year"],
-  "properties": {
-    "tafe_calendar_id": { "type": "string", "format": "uuid", "x-eq-required-on-import": false },
-    "tenant_id": { "type": "string", "format": "uuid", "x-eq-system-managed": true },
-    "year": { "type": "integer", "minimum": 2020, "maximum": 2099 },
-    "trade": { "type": ["string", "null"] },
-    "year_level": { "type": ["integer", "null"], "minimum": 1, "maximum": 4 },
-    "term_dates": { "type": "array", "default": [], "items": { "type": "object" } },
-    "public_holidays": { "type": "array", "default": [], "items": { "type": "object" } }
-  }
-}
-'::jsonb, 'TAFE term dates + public holidays per trade/year. Drives apprentice rostering avoidance.', true)
 on conflict (entity, version) do update set
   schema_json = excluded.schema_json,
   description = excluded.description,
