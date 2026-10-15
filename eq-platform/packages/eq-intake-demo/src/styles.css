@@ -4032,6 +4032,7 @@ button.eq-primary:hover {
 .eq-drill__back:hover { border-color: var(--eq-sky); color: var(--eq-deep); }
 .eq-drill__title { font-size: 16px; font-weight: 600; color: var(--eq-ink); margin: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .eq-drill__gap-badge { display: inline-flex; align-items: center; padding: 2px 8px; background: #fef3c7; color: #92400e; border-radius: 4px; font-size: 12px; font-weight: 500; }
+.eq-drill__retired-note { font-size: 12px; font-weight: 400; color: var(--eq-gray-600, #4b5563); }
 .eq-drill__dupe-count-badge { display: inline-flex; align-items: center; padding: 2px 8px; background: var(--eq-ice); color: var(--eq-deep); border-radius: 4px; font-size: 12px; font-weight: 500; }
 .eq-drill__actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; flex-shrink: 0; }
 .eq-drill__filter { display: flex; border: 1px solid var(--eq-line); border-radius: 6px; overflow: hidden; }

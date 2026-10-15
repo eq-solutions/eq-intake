@@ -31,6 +31,7 @@ import type {
 } from "@eq/intake";
 import type { SupabaseLikeClient } from "../canonical/commit-canonical.js";
 import { fieldLabel } from "../shared/entity-label.js";
+import { splitRetired } from "./retired-sites.js";
 import { Table, type TableColumn } from "@eq-solutions/ui/Table";
 
 export interface EntityDrillDownProps {
@@ -270,6 +271,8 @@ export function EntityDrillDown({
   fieldImportanceOverrides,
 }: EntityDrillDownProps): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
+  // Sites merged into another record (active = false): kept in the database, kept out of this list.
+  const [retiredCount, setRetiredCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hiddenPii, setHiddenPii] = useState<string[]>([]);
@@ -366,7 +369,9 @@ export function EntityDrillDown({
       try {
         const data = await fetchCanonicalRows(supabase as unknown as CanonicalFetchClient, entity);
         if (!cancelled) {
-          setRows(data.map((row) => deriveRow(entity, row)));
+          const { live, retired } = splitRetired(entity, data);
+          setRows(live.map((row) => deriveRow(entity, row)));
+          setRetiredCount(retired);
           setHiddenPii(withheldPiiColumns(entity, data));
         }
       } catch (err: unknown) {
@@ -1344,6 +1349,11 @@ export function EntityDrillDown({
             {dupeCount > 0 && (
               <span className="eq-drill__dupe-count-badge">
                 {dupeCount} possible dupes
+              </span>
+            )}
+            {retiredCount > 0 && (
+              <span className="eq-drill__retired-note" title="Merged into another record, so not counted or checked for duplicates">
+                {retiredCount} merged hidden
               </span>
             )}
           </h2>
