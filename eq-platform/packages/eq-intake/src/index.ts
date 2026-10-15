@@ -75,6 +75,9 @@ export { readEntityColumns } from "./read-entity-columns.js";
 export { ENTITY_COLUMNS, PII_COLUMNS, isEntityTable, nonPiiColumns } from "./entity-columns.js";
 export type { EntityTable } from "./entity-columns.js";
 
+export { buildOverviewWork, skippedChecks } from "./overview-work.js";
+export type { WorkItem, WorkKind, OverviewWork, OverviewWorkInput, RecordSummary, OrphanCounts } from "./overview-work.js";
+
 export { findStaleQueueItems, STALE_STAFF_COLUMNS } from "./queue-stale.js";
 export type { StaleCheckItem, StaleVerdict } from "./queue-stale.js";
 export type { CanonicalFetchClient, CanonicalEntity } from "./fetch-canonical.js";
