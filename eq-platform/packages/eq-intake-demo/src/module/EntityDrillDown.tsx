@@ -13,6 +13,7 @@ import {
   getFieldEnumValues,
   archiveDuplicateRecord,
   isArchivableDuplicate,
+  splitRetired,
 } from "@eq/intake";
 import type {
   CanonicalFetchClient,
@@ -31,7 +32,6 @@ import type {
 } from "@eq/intake";
 import type { SupabaseLikeClient } from "../canonical/commit-canonical.js";
 import { fieldLabel } from "../shared/entity-label.js";
-import { splitRetired } from "./retired-sites.js";
 import { Table, type TableColumn } from "@eq-solutions/ui/Table";
 
 export interface EntityDrillDownProps {

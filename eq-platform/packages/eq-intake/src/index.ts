@@ -69,6 +69,11 @@ export type {
 
 export { fetchCanonicalRows, entityToTable, withheldPiiColumns } from "./fetch-canonical.js";
 
+// Sites merged into another record (active = false) stay in the database but are not
+// counted, listed or checked for duplicates.
+export { splitRetired } from "./retired-sites.js";
+export type { RetiredSplit } from "./retired-sites.js";
+
 // Column-projected entity reads (eq_tidy_read_entity_columns) — the only way
 // to read app_data entities; the 1-arg eq_tidy_read_entity is gone or gated.
 export { readEntityColumns } from "./read-entity-columns.js";
