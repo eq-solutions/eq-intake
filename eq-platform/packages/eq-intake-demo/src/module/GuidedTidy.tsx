@@ -8,7 +8,7 @@
  * go through the same commit the old Tidy tab uses; Undo writes the old values back.
  */
 
-import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from "react";
 import {
   fetchCanonicalRows,
   commitTidyFixes,
@@ -26,7 +26,7 @@ import {
   type TidyFix,
 } from "@eq/intake";
 import type { SupabaseLikeClient } from "../canonical/commit-canonical.js";
-import { loadBatches, pushBatch, saveBatches, type TidyBatch } from "./guided-tidy-history.js";
+import { loadBatches, nextSelection, pushBatch, saveBatches, type TidyBatch } from "./guided-tidy-history.js";
 import { describeCounts } from "./GuidedTidyCard.js";
 
 export interface GuidedTidyProps {
@@ -73,10 +73,12 @@ function ChangeRow({ p, checked, onToggle, disabled }: { p: Proposal; checked: b
 }
 
 function Section({
-  title, sub, items, selected, onToggle, onToggleAll, disabled,
+  title, sub, items, selected, onToggle, onToggleAll, disabled, footer,
 }: {
   title: string; sub: string; items: Proposal[]; selected: ReadonlySet<string>;
   onToggle: (id: string) => void; onToggleAll: (ids: string[], on: boolean) => void; disabled: boolean;
+  /** Shown under the last site of the group, e.g. an Apply button so nobody has to scroll to the end. */
+  footer?: ReactNode;
 }): JSX.Element | null {
   if (items.length === 0) return null;
   const allOn = items.every((p) => selected.has(p.id));
@@ -101,6 +103,7 @@ function Section({
           ))}
         </div>
       ))}
+      {footer && <div className="eq-gt-section__foot">{footer}</div>}
     </section>
   );
 }
@@ -114,14 +117,24 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
   const [notice, setNotice] = useState<{ kind: "ok" | "warn"; text: string } | null>(null);
   const [batches, setBatches] = useState<TidyBatch[]>(() => loadBatches(tenantId));
 
-  const load = useCallback(async () => {
+  const knownIds = useRef<Set<string>>(new Set());
+
+  // keep = true after an apply: whatever is still on offer stays ticked or answered as it was.
+  const load = useCallback(async (keep: boolean = false) => {
     if (!supabase) { setError("No database connection available."); return; }
     setError(null);
     try {
       const next = await loadPlan(supabase);
       setPlan(next);
-      setSelected(new Set(next.proposals.filter((p) => p.tier === "sure").map((p) => p.id)));
-      setAnswers({});
+      if (keep) {
+        setSelected((prev) => nextSelection(prev, knownIds.current, next.proposals));
+        const stillAsked = new Set(next.questions.map((q) => q.id));
+        setAnswers((a) => Object.fromEntries(Object.entries(a).filter(([id]) => stillAsked.has(id))));
+      } else {
+        setSelected(new Set(next.proposals.filter((p) => p.tier === "sure").map((p) => p.id)));
+        setAnswers({});
+      }
+      knownIds.current = new Set(next.proposals.map((p) => p.id));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't read your sites.");
     }
@@ -140,12 +153,15 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
   const toggle = (id: string): void => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const toggleAll = (ids: string[], on: boolean): void => setSelected((s) => { const n = new Set(s); for (const id of ids) { if (on) n.add(id); else n.delete(id); } return n; });
 
-  const apply = async (): Promise<void> => {
-    if (!supabase || !tenantId || chosen.length === 0) return;
+  const sureChosen = useMemo(() => sure.filter((p) => selected.has(p.id)), [sure, selected]);
+
+  // Applies the given suggestions (default: everything ticked or answered).
+  const apply = async (list: Proposal[] = chosen): Promise<void> => {
+    if (!supabase || !tenantId || list.length === 0) return;
     setBusy(true);
     setNotice(null);
     try {
-      const fixes = proposalsToFixes(chosen);
+      const fixes = proposalsToFixes(list);
       const result = await commit(supabase, tenantId, fixes);
       const batch: TidyBatch = { id: crypto.randomUUID(), at: new Date().toISOString(), count: result.applied, fixes };
       const nextBatches = pushBatch(batches, batch);
@@ -155,7 +171,7 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
         ? { kind: "warn", text: `Applied ${plural(result.applied, "change")}. ${plural(result.skipped, "change")} couldn't be saved and were left as they were.` }
         : { kind: "ok", text: `Applied ${plural(result.applied, "change")}. You can undo this below.` });
       onDataChanged?.();
-      await load();
+      await load(true);
     } catch (e) {
       setNotice({ kind: "warn", text: e instanceof Error ? e.message : "That didn't save. Nothing was changed." });
     } finally {
@@ -213,6 +229,14 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
             title="Sure things"
             sub="Read straight from what's already typed, or just spacing and capital letters. Untick anything you don't want."
             items={sure} selected={selected} onToggle={toggle} onToggleAll={toggleAll} disabled={!canEdit || busy}
+            footer={canEdit && (
+              <div className="eq-gt-actions eq-gt-actions--inline">
+                <button type="button" className="eq-intake-btn-primary" onClick={() => void apply(sureChosen)} disabled={busy || sureChosen.length === 0}>
+                  {busy ? "Working…" : sureChosen.length === 0 ? "Nothing ticked" : `Apply ${plural(sureChosen.length, "change")}`}
+                </button>
+                <span className="eq-gt__detail">Just these ones. You can undo it afterwards.</span>
+              </div>
+            )}
           />
           <Section
             title="Worth a quick look"

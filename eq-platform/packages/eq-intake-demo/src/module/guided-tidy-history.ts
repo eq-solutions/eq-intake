@@ -15,6 +15,23 @@ export interface TidyBatch {
 }
 
 const MAX_BATCHES = 5;
+
+/**
+ * After an apply the plan is read again. Keep what the person had ticked for the
+ * suggestions that are still on offer; a suggestion that was not in the old plan
+ * (it only appeared now) gets its normal default, ticked when it is a sure one.
+ */
+export function nextSelection(
+  prevSelected: ReadonlySet<string>,
+  prevIds: ReadonlySet<string>,
+  next: ReadonlyArray<{ id: string; tier: "sure" | "check" }>,
+): Set<string> {
+  const out = new Set<string>();
+  for (const p of next) {
+    if (prevIds.has(p.id) ? prevSelected.has(p.id) : p.tier === "sure") out.add(p.id);
+  }
+  return out;
+}
 const storageKey = (tenantId: string | undefined): string => `eq-guided-tidy:${tenantId ?? "none"}`;
 
 /** Newest first, capped. */
