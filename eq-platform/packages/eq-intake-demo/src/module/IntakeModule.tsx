@@ -37,6 +37,8 @@ import { ReconcileModule } from "./ReconcileModule.js";
 import { QualifyModule } from "./QualifyModule.js";
 import { IntakeHealthHome } from "./IntakeHealthHome.js";
 import { EntityDrillDown } from "./EntityDrillDown.js";
+import { GuidedTidy } from "./GuidedTidy.js";
+import { GuidedTidyCard } from "./GuidedTidyCard.js";
 import { AskCanonical } from "./AskCanonical.js";
 import { RemediationQueue } from "./RemediationQueue.js";
 import { FieldImportanceSettings } from "./FieldImportanceSettings.js";
@@ -187,6 +189,7 @@ export function IntakeModule(props: IntakeModuleProps): JSX.Element {
   const [destId, setDestId] = useState<string>(INTO_EQ_ID);
   const [mode, setMode] = useState<IntakeMode>("health");
   const [drillEntity, setDrillEntity] = useState<string | null>(null);
+  const [showGuidedTidy, setShowGuidedTidy] = useState(false);
   const [drillFilters, setDrillFilters] = useState<{ filters: AskFilter[]; label: string } | null>(null);
   /** Set when a Health Overview "Fix these" card is clicked for a specific
    * gap field (e.g. "phone") — tells EntityDrillDown to open straight into
@@ -387,6 +390,14 @@ export function IntakeModule(props: IntakeModuleProps): JSX.Element {
             tradesState={tenantTrades}
             onBack={() => setShowTradesSettings(false)}
           />
+        ) : showGuidedTidy ? (
+          <GuidedTidy
+            supabase={props.supabase}
+            tenantId={props.tenantId}
+            canEdit={props.canEditCanonical}
+            onBack={() => setShowGuidedTidy(false)}
+            onDataChanged={bumpDataVersion}
+          />
         ) : drillEntity !== null ? (
           <EntityDrillDown
             entity={drillEntity}
@@ -409,6 +420,14 @@ export function IntakeModule(props: IntakeModuleProps): JSX.Element {
             fieldImportanceOverrides={fieldImportance.overrides}
             onBringDataIn={props.canImport ? () => setMode("import") : undefined}
             refreshSignal={dataVersion}
+            topSlot={
+              <GuidedTidyCard
+                supabase={props.supabase}
+                canEdit={props.canEditCanonical}
+                onOpen={() => setShowGuidedTidy(true)}
+                refreshSignal={dataVersion}
+              />
+            }
           />
         )
       ) : mode === "queue" ? (

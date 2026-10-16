@@ -72,6 +72,10 @@ export { fetchCanonicalRows, entityToTable, withheldPiiColumns } from "./fetch-c
 // Sites merged into another record (active = false) stay in the database but are not
 // counted, listed or checked for duplicates.
 export { splitRetired } from "./retired-sites.js";
+export {
+  planSiteTidy, proposalsToFixes, undoFixes, answerToProposal, groupBySite, FIELD_LABEL,
+} from "./guided-tidy.js";
+export type { Proposal, Question, GuidedPlan, GuidedFix, SiteRow as GuidedSiteRow } from "./guided-tidy.js";
 export type { RetiredSplit } from "./retired-sites.js";
 
 // Column-projected entity reads (eq_tidy_read_entity_columns) — the only way
