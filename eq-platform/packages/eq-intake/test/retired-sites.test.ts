@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { splitRetired } from "../src/module/retired-sites.js";
+import { splitRetired } from "../src/retired-sites.js";
 
 describe("splitRetired", () => {
   const rows = [

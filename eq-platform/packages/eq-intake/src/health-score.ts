@@ -24,6 +24,7 @@ import type { SupabaseLikeClient } from './canonical/commit-canonical.js';
 import { isValidAbn, isValidAuPhone, isValidAuState, isValidAuPostcode } from './normalize.js';
 import { getFlaggableFields, isFieldBlank, FIELD_IMPORTANCE, type FieldImportanceOverride } from './field-importance.js';
 import { readEntityColumns } from './read-entity-columns.js';
+import { splitRetired } from './retired-sites.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -108,6 +109,8 @@ function buildRpcColumns(entity: string): string[] {
     ...(VALIDITY_CHECK_COLUMNS[entity] ?? []),
     'updated_at',
   ]);
+  // Needed to leave merged (retired) sites out of the totals and gap counts.
+  if (entity === 'sites') cols.add('active');
   const phoneField = PHONE_FIELD[entity];
   if (phoneField) cols.add(phoneField);
   return [...cols];
@@ -223,7 +226,7 @@ export async function computeHealthScores(
       };
     }
 
-    const rows     = (rawData as Record<string, unknown>[] | null) ?? [];
+    const rows     = splitRetired(entity, (rawData as Record<string, unknown>[] | null) ?? []).live;
     const total    = rows.length;
     const complete = rows.filter((r) => isComplete(r, required)).length;
     const score    = total === 0 ? 1 : complete / total;
