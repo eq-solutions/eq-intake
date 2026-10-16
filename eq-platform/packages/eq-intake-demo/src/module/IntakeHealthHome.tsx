@@ -46,6 +46,8 @@ export interface IntakeHealthHomeProps {
    * go stale until someone remembers to hit the manual Refresh button.
    */
   refreshSignal?: number;
+  /** Shown between the headline and the lists, e.g. the guided tidy invitation. */
+  topSlot?: ReactNode;
 }
 
 // ---------------------------------------------------------------------------
@@ -369,6 +371,7 @@ export function IntakeHealthHome({
   fieldImportanceOverrides,
   onBringDataIn,
   refreshSignal,
+  topSlot,
 }: IntakeHealthHomeProps): JSX.Element {
   const [scores,     setScores]     = useState<HealthScore[] | null>(null);
   const [licences,   setLicences]   = useState<LicenceExpiryAlertSummary | null>(null);
@@ -633,6 +636,8 @@ export function IntakeHealthHome({
           </p>
         </div>
       )}
+
+      {topSlot}
 
       <div className="eq-work-layout">
         <div className="eq-work-main">
