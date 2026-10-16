@@ -5317,6 +5317,8 @@ button.eq-primary:hover {
 .eq-gt-old { color: var(--eq-muted); }
 .eq-gt-blank { color: var(--eq-muted); }
 .eq-gt-actions { display: flex; align-items: center; gap: 12px; margin: 0 0 24px; }
+.eq-gt-section__foot { margin: 4px 0 0; }
+.eq-gt-actions--inline { margin: 0; }
 .eq-gt-question { border: 1px solid var(--eq-line); border-radius: 8px; background: var(--eq-paper); padding: 10px 14px; margin: 0 0 8px; }
 .eq-gt-question__title { font-size: 14px; font-weight: 600; color: var(--eq-ink); padding: 0 4px; }
 .eq-gt-option { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; color: var(--eq-ink); cursor: pointer; }
