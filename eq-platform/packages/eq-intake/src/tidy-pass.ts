@@ -538,7 +538,7 @@ export async function commitTidyFixes(opts: TidyCommitOpts): Promise<TidyCommitR
 
   const { data, error } = await opts.supabase.rpc('eq_tidy_commit_fixes', {
     p_intake_id: intakeId,
-    p_fixes:     JSON.stringify(rpcFixes),
+    p_fixes:     rpcFixes,
   });
 
   const errors: TidyCommitResult['errors'] = [];
