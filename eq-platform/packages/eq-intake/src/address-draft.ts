@@ -10,8 +10,10 @@ import { knownSuburb } from './au-suburbs.js';
 import { splitRetired } from './retired-sites.js';
 import type { Proposal, SiteField, SiteRow } from './guided-tidy.js';
 
-export const MAX_DRAFT_SITES = 20;
-export const DRAFT_MODEL = 'claude-sonnet-4-5';
+export const MAX_DRAFT_SITES = 40;
+/** Shell's server stops a request at 26 seconds, so a request asks about a couple of sites at a time. */
+export const DRAFT_BATCH_SIZE = 2;
+export const DRAFT_MODEL = 'claude-haiku-4-5';
 
 export interface DraftCandidate {
   id: string;
@@ -34,8 +36,8 @@ export function buildDraftRequest(candidates: readonly DraftCandidate[]): Record
   const list = candidates.map((c) => `- id ${c.id}: ${c.name}`).join('\n');
   return {
     model: DRAFT_MODEL,
-    max_tokens: 4000,
-    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 20 }],
+    max_tokens: 1500,
+    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: Math.max(2, candidates.length * 2) }],
     messages: [{
       role: 'user',
       content:

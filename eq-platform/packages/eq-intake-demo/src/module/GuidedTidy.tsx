@@ -171,13 +171,18 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
     setAiBusy(true);
     setAiNote(null);
     try {
-      const found = await lookupAddresses(candidates);
-      setAiProposals(found);
+      setAiProposals([]);
       setAiSelected(new Set());
+      const { proposals: found, failed } = await lookupAddresses(candidates, undefined, (p) => {
+        setAiProposals(p.proposals);
+        setAiNote(`Searching… ${p.checked} of ${p.total} checked.`);
+      });
+      setAiProposals(found);
       const sites = new Set(found.map((p) => p.row_id)).size;
+      const missed = failed > 0 ? ` ${plural(failed, "site")} couldn't be checked this time, so press the button again to retry.` : "";
       setAiNote(found.length === 0
-        ? "I couldn't confirm any of them. They stay blank."
-        : `I found ${plural(sites, "address", "addresses")} out of ${candidates.length}. The rest I wasn't sure about, so they stay blank.`);
+        ? `I couldn't confirm any of them. They stay blank.${missed}`
+        : `I found ${plural(sites, "address", "addresses")} out of ${candidates.length}. The rest I wasn't sure about, so they stay blank.${missed}`);
     } catch (e) {
       setAiNote(e instanceof Error ? e.message : "The address lookup didn't work this time.");
     } finally {

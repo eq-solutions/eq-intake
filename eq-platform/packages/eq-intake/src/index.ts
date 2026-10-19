@@ -76,7 +76,7 @@ export {
   planSiteTidy, proposalsToFixes, undoFixes, answerToProposal, groupBySite, FIELD_LABEL,
 } from "./guided-tidy.js";
 export type { Proposal, Question, GuidedPlan, GuidedFix, SiteRow as GuidedSiteRow } from "./guided-tidy.js";
-export { MAX_DRAFT_SITES, buildDraftRequest, draftCandidates, draftProposals, hostOf } from "./address-draft.js";
+export { DRAFT_BATCH_SIZE, MAX_DRAFT_SITES, buildDraftRequest, draftCandidates, draftProposals, hostOf } from "./address-draft.js";
 export type { DraftCandidate, DraftProposal } from "./address-draft.js";
 export type { RetiredSplit } from "./retired-sites.js";
 
