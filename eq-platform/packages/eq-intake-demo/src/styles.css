@@ -5387,3 +5387,14 @@ button.eq-primary:hover {
   .eq-work-row { flex-direction: column; align-items: stretch; }
   .eq-work-row__btn { width: 100%; min-height: 44px; }
 }
+
+.eq-gt-progress { margin: 12px 0 0; font-size: 13px; color: var(--eq-ink); }
+.eq-gt-progress__row { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.eq-gt-progress__track { height: 6px; border-radius: 3px; background: var(--eq-line); overflow: hidden; }
+.eq-gt-progress__fill { height: 100%; background: var(--eq-sky); transition: width 0.4s ease; }
+.eq-gt-spinner { width: 14px; height: 14px; border: 2px solid var(--eq-line); border-top-color: var(--eq-sky); border-radius: 50%; animation: eq-gt-spin 0.9s linear infinite; flex: none; }
+@keyframes eq-gt-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .eq-gt-spinner { animation: none; }
+  .eq-gt-progress__fill { transition: none; }
+}
