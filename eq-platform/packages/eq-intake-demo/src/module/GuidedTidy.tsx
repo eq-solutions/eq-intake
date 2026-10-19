@@ -118,6 +118,7 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
   const [batches, setBatches] = useState<TidyBatch[]>(() => loadBatches(tenantId));
 
   const knownIds = useRef<Set<string>>(new Set());
+  const bannerRef = useRef<HTMLDivElement | null>(null);
 
   // keep = true after an apply: whatever is still on offer stays ticked or answered as it was.
   const load = useCallback(async (keep: boolean = false) => {
@@ -156,6 +157,10 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
   const sureChosen = useMemo(() => sure.filter((p) => selected.has(p.id)), [sure, selected]);
 
   // Applies the given suggestions (default: everything ticked or answered).
+  useEffect(() => {
+    if (notice) bannerRef.current?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+  }, [notice]);
+
   const apply = async (list: Proposal[] = chosen): Promise<void> => {
     if (!supabase || !tenantId || list.length === 0) return;
     setBusy(true);
@@ -208,7 +213,7 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
       </div>
 
       {error && <div className="eq-gt-banner eq-gt-banner--warn" role="alert">{error}</div>}
-      {notice && <div className={`eq-gt-banner eq-gt-banner--${notice.kind}`} role="status">{notice.text}</div>}
+      {notice && <div ref={bannerRef} className={`eq-gt-banner eq-gt-banner--${notice.kind}`} role="status">{notice.text}</div>}
       {!plan && !error && <p className="eq-gt__loading">Looking through your sites…</p>}
 
       {plan && (
