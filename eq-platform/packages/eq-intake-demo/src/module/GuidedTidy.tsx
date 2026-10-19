@@ -308,12 +308,12 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
                 </button>
               </div>
               {aiProgress && (
-                <div className="eq-gt-progress" role="progressbar" aria-valuemin={0} aria-valuemax={aiProgress.total} aria-valuenow={aiProgress.checked} aria-label="Looking up addresses">
+                <div className="eq-gt-progress" role="status">
                   <div className="eq-gt-progress__row">
                     <span className="eq-gt-spinner" aria-hidden="true" />
                     <span>Searching the web… {aiProgress.checked} of {aiProgress.total} sites checked. This takes about a minute.</span>
                   </div>
-                  <div className="eq-gt-progress__track">
+                  <div className="eq-gt-progress__track" aria-hidden="true">
                     <div className="eq-gt-progress__fill" style={{ width: `${aiProgress.total === 0 ? 0 : Math.round((aiProgress.checked / aiProgress.total) * 100)}%` }} />
                   </div>
                 </div>
