@@ -22,6 +22,7 @@
  */
 
 import { splitRetired } from './retired-sites.js';
+import { knownSuburb } from './au-suburbs.js';
 
 export type Tier = 'sure' | 'check';
 export type ProposalKind = 'from_address' | 'from_suburb' | 'format' | 'spelling';
@@ -335,6 +336,13 @@ export function planSiteTidy(allRows: readonly SiteRow[]): GuidedPlan {
             options: [...pcs].sort((a, b) => b[1] - a[1]).map(([pc, n]) => ({ value: pc, label: `${pc} (${n} site${n === 1 ? '' : 's'})` })),
           });
         }
+        else if (!pcs) {
+          const known = knownSuburb(suburbNow);
+          if (known) {
+            add({ field: 'postcode', old_value: null, new_value: known.postcode, tier: 'check', kind: 'from_suburb',
+              why: `${titleCase(suburbNow)} is postcode ${known.postcode}` });
+          }
+        }
       }
       if (blank(s.state) && !parsed.state) {
         const sts = statesBySuburb.get(key);
@@ -342,6 +350,13 @@ export function planSiteTidy(allRows: readonly SiteRow[]): GuidedPlan {
           const [st, n] = [...sts][0]!;
           add({ field: 'state', old_value: null, new_value: st, tier: 'check', kind: 'from_suburb',
             why: `${n} other site${n === 1 ? '' : 's'} in ${titleCase(suburbNow)} ${n === 1 ? 'is' : 'are'} in ${st}` });
+        }
+        else if (!sts) {
+          const known = knownSuburb(suburbNow);
+          if (known) {
+            add({ field: 'state', old_value: null, new_value: known.state, tier: 'check', kind: 'from_suburb',
+              why: `${titleCase(suburbNow)} is in ${known.state}` });
+          }
         }
       }
     }
