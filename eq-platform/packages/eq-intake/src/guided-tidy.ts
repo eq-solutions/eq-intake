@@ -25,7 +25,7 @@ import { splitRetired } from './retired-sites.js';
 import { knownSuburb } from './au-suburbs.js';
 
 export type Tier = 'sure' | 'check';
-export type ProposalKind = 'from_address' | 'from_suburb' | 'format' | 'spelling';
+export type ProposalKind = 'from_address' | 'from_suburb' | 'format' | 'spelling' | 'ai_draft';
 export type SiteField = 'name' | 'address_line_1' | 'address_line_2' | 'suburb' | 'state' | 'postcode';
 
 export interface SiteRow {
@@ -51,6 +51,8 @@ export interface Proposal {
   kind: ProposalKind;
   /** Plain-English reason shown next to the change. */
   why: string;
+  /** Page the value came from, for AI-drafted suggestions. */
+  source?: string;
 }
 
 export interface QuestionOption {
