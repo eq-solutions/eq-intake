@@ -17,6 +17,7 @@ import {
   undoFixes,
   answerToProposal,
   groupBySite,
+  draftCandidates,
   FIELD_LABEL,
   type CanonicalFetchClient,
   type GuidedPlan,
@@ -28,6 +29,7 @@ import {
 import type { SupabaseLikeClient } from "../canonical/commit-canonical.js";
 import { loadBatches, nextSelection, pushBatch, saveBatches, type TidyBatch } from "./guided-tidy-history.js";
 import { describeCounts } from "./GuidedTidyCard.js";
+import { lookupAddresses } from "./ai-address-lookup.js";
 
 export interface GuidedTidyProps {
   supabase?: SupabaseLikeClient | null;
@@ -41,9 +43,9 @@ export interface GuidedTidyProps {
 
 const plural = (n: number, one: string, many: string = `${one}s`): string => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
-async function loadPlan(supabase: SupabaseLikeClient): Promise<GuidedPlan> {
-  const rows = await fetchCanonicalRows(supabase as unknown as CanonicalFetchClient, "sites");
-  return planSiteTidy(rows as unknown as GuidedSiteRow[]);
+async function loadPlan(supabase: SupabaseLikeClient): Promise<{ plan: GuidedPlan; rows: GuidedSiteRow[] }> {
+  const rows = (await fetchCanonicalRows(supabase as unknown as CanonicalFetchClient, "sites")) as unknown as GuidedSiteRow[];
+  return { plan: planSiteTidy(rows), rows };
 }
 
 function commit(supabase: SupabaseLikeClient, tenantId: string, fixes: GuidedFix[]) {
@@ -66,7 +68,10 @@ function ChangeRow({ p, checked, onToggle, disabled }: { p: Proposal; checked: b
           <span aria-hidden="true"> → </span>
           <strong>{p.new_value}</strong>
         </span>
-        <span className="eq-gt-change__why">{p.why}</span>
+        <span className="eq-gt-change__why">
+          {p.why}
+          {p.source && <> · <a href={p.source} target="_blank" rel="noreferrer">Open the page</a></>}
+        </span>
       </span>
     </label>
   );
@@ -117,6 +122,12 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
   const [notice, setNotice] = useState<{ kind: "ok" | "warn"; text: string } | null>(null);
   const [batches, setBatches] = useState<TidyBatch[]>(() => loadBatches(tenantId));
 
+  const [aiProposals, setAiProposals] = useState<Proposal[]>([]);
+  const [aiSelected, setAiSelected] = useState<Set<string>>(new Set());
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiNote, setAiNote] = useState<string | null>(null);
+  const rowsRef = useRef<GuidedSiteRow[]>([]);
+
   const knownIds = useRef<Set<string>>(new Set());
   const bannerRef = useRef<HTMLDivElement | null>(null);
 
@@ -125,7 +136,8 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
     if (!supabase) { setError("No database connection available."); return; }
     setError(null);
     try {
-      const next = await loadPlan(supabase);
+      const { plan: next, rows } = await loadPlan(supabase);
+      rowsRef.current = rows;
       setPlan(next);
       if (keep) {
         setSelected((prev) => nextSelection(prev, knownIds.current, next.proposals));
@@ -149,7 +161,29 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
     () => (plan?.questions ?? []).map((q) => answerToProposal(q, answers[q.id] ?? "")).filter((p): p is Proposal => p !== null),
     [plan, answers],
   );
-  const chosen = useMemo(() => [...(plan?.proposals ?? []).filter((p) => selected.has(p.id)), ...answered], [plan, selected, answered]);
+  const aiChosen = useMemo(() => aiProposals.filter((p) => aiSelected.has(p.id)), [aiProposals, aiSelected]);
+  const chosen = useMemo(() => [...(plan?.proposals ?? []).filter((p) => selected.has(p.id)), ...answered, ...aiChosen], [plan, selected, answered, aiChosen]);
+  const candidates = useMemo(() => draftCandidates(rowsRef.current), [plan]);
+  const toggleAi = (id: string): void => setAiSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleAllAi = (ids: string[], on: boolean): void => setAiSelected((s) => { const n = new Set(s); for (const id of ids) { if (on) n.add(id); else n.delete(id); } return n; });
+
+  const lookUp = async (): Promise<void> => {
+    setAiBusy(true);
+    setAiNote(null);
+    try {
+      const found = await lookupAddresses(candidates);
+      setAiProposals(found);
+      setAiSelected(new Set());
+      const sites = new Set(found.map((p) => p.row_id)).size;
+      setAiNote(found.length === 0
+        ? "I couldn't confirm any of them. They stay blank."
+        : `I found ${plural(sites, "address", "addresses")} out of ${candidates.length}. The rest I wasn't sure about, so they stay blank.`);
+    } catch (e) {
+      setAiNote(e instanceof Error ? e.message : "The address lookup didn't work this time.");
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
   const toggle = (id: string): void => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const toggleAll = (ids: string[], on: boolean): void => setSelected((s) => { const n = new Set(s); for (const id of ids) { if (on) n.add(id); else n.delete(id); } return n; });
@@ -175,6 +209,9 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
       setNotice(result.skipped > 0
         ? { kind: "warn", text: `Applied ${plural(result.applied, "change")}. ${plural(result.skipped, "change")} couldn't be saved and were left as they were.` }
         : { kind: "ok", text: `Applied ${plural(result.applied, "change")}. You can undo this below.` });
+      const done = new Set(list.map((p) => p.id));
+      setAiProposals((cur) => cur.filter((p) => !done.has(p.id)));
+      setAiSelected((cur) => new Set([...cur].filter((id) => !done.has(id))));
       onDataChanged?.();
       await load(true);
     } catch (e) {
@@ -249,6 +286,29 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
             items={check} selected={selected} onToggle={toggle} onToggleAll={toggleAll} disabled={!canEdit || busy}
           />
 
+          {canEdit && candidates.length > 0 && aiProposals.length === 0 && (
+            <section className="eq-gt-section">
+              <div className="eq-gt-section__head">
+                <div>
+                  <h3 className="eq-gt-section__title">Sites with no address</h3>
+                  <p className="eq-gt-section__sub">
+                    {plural(candidates.length, "site")} {candidates.length === 1 ? "has" : "have"} no address at all. I can search the web for the real places and suggest one, with the page it came from. You check each one before anything changes.
+                  </p>
+                </div>
+                <button type="button" className="eq-intake-btn-primary" onClick={() => void lookUp()} disabled={aiBusy || busy}>
+                  {aiBusy ? "Searching…" : "Look up addresses"}
+                </button>
+              </div>
+              {aiNote && <p className="eq-gt__detail">{aiNote}</p>}
+            </section>
+          )}
+          <Section
+            title="AI guesses"
+            sub="Found by searching the web. Each one shows the page it came from. Open it and check before you tick it."
+            items={aiProposals} selected={aiSelected} onToggle={toggleAi} onToggleAll={toggleAllAi} disabled={!canEdit || busy}
+          />
+          {aiNote && aiProposals.length > 0 && <p className="eq-gt__detail">{aiNote}</p>}
+
           {plan.questions.length > 0 && (
             <section className="eq-gt-section">
               <div className="eq-gt-section__head">
@@ -276,7 +336,7 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
             </section>
           )}
 
-          {!nothing && canEdit && (
+          {(!nothing || aiProposals.length > 0) && canEdit && (
             <div className="eq-gt-actions">
               <button type="button" className="eq-intake-btn-primary" onClick={() => void apply()} disabled={busy || chosen.length === 0}>
                 {busy ? "Working…" : chosen.length === 0 ? "Nothing ticked" : `Apply ${plural(chosen.length, "change")}`}
