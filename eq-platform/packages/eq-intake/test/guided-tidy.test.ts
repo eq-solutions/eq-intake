@@ -163,3 +163,25 @@ describe("applying and undoing", () => {
     expect(FIELD_LABEL.address_line_1).toBe("Street address");
   });
 });
+
+describe("postcodes from the built-in suburb list", () => {
+  it("fills a blank postcode for a suburb with one postcode, as a check, when no other site answers it", () => {
+    const plan = planSiteTidy([site("a", { address_line_1: "35 Huntingwood Drive", suburb: "Huntingwood", state: "NSW", postcode: null })]);
+    expect(get(plan, "a", "postcode")).toMatchObject({ new_value: "2148", tier: "check", kind: "from_suburb" });
+  });
+
+  it("fills a blank state the same way", () => {
+    const plan = planSiteTidy([site("a", { suburb: "Hunters Hill", state: null, postcode: "2110" })]);
+    expect(get(plan, "a", "state")).toMatchObject({ new_value: "NSW", tier: "check" });
+  });
+
+  it("leaves unknown suburbs alone, and lets the tenant's own sites win over the list", () => {
+    const unknown = planSiteTidy([site("a", { suburb: "Nowhereville", state: "NSW", postcode: null })]);
+    expect(get(unknown, "a", "postcode")).toBeUndefined();
+    const own = planSiteTidy([
+      site("a", { suburb: "Huntingwood", state: "NSW", postcode: null }),
+      site("b", { suburb: "Huntingwood", state: "NSW", postcode: "2999" }),
+    ]);
+    expect(get(own, "a", "postcode")).toMatchObject({ new_value: "2999" });
+  });
+});
