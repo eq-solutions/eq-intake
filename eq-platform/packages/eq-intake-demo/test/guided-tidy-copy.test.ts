@@ -7,6 +7,8 @@ describe("describeCounts", () => {
     expect(describeCounts({ sure: 19, check: 12, questions: 1 })).toBe("19 changes I'm sure about, 12 to check, 1 question for you");
     expect(describeCounts({ sure: 0, check: 11, questions: 0 })).toBe("11 to check");
     expect(describeCounts({ sure: 1, check: 0, questions: 2 })).toBe("1 change I'm sure about, 2 questions for you");
+    expect(describeCounts({ sure: 0, check: 0, questions: 0, lookups: 14 })).toBe("14 sites with no address I can look up");
+    expect(describeCounts({ sure: 2, check: 0, questions: 0, lookups: 1 })).toBe("2 changes I'm sure about, 1 site with no address I can look up");
   });
 });
 

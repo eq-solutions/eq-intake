@@ -358,7 +358,7 @@ function WorkRow({
   );
 }
 
-const WORK_VISIBLE = 6;
+const WORK_VISIBLE = 3;
 
 // ---------------------------------------------------------------------------
 // Root component

@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useState, type JSX } from "react";
-import { fetchCanonicalRows, planSiteTidy, type CanonicalFetchClient, type GuidedPlan, type GuidedSiteRow } from "@eq/intake";
+import { draftCandidates, fetchCanonicalRows, planSiteTidy, type CanonicalFetchClient, type GuidedPlan, type GuidedSiteRow } from "@eq/intake";
 import type { SupabaseLikeClient } from "../canonical/commit-canonical.js";
 
 export interface GuidedTidyCardProps {
@@ -19,16 +19,18 @@ export interface GuidedTidyCardProps {
 const plural = (n: number, one: string, many: string = `${one}s`): string => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
 /** "19 changes I'm sure about, 12 to check, 1 question for you" - only the parts that are not zero. */
-export function describeCounts(c: { sure: number; check: number; questions: number }): string {
+export function describeCounts(c: { sure: number; check: number; questions: number; lookups?: number }): string {
   const parts: string[] = [];
   if (c.sure > 0) parts.push(`${c.sure.toLocaleString()} ${c.sure === 1 ? "change" : "changes"} I'm sure about`);
   if (c.check > 0) parts.push(`${c.check.toLocaleString()} to check`);
   if (c.questions > 0) parts.push(`${c.questions.toLocaleString()} ${c.questions === 1 ? "question" : "questions"} for you`);
+  if (c.lookups && c.lookups > 0) parts.push(`${c.lookups.toLocaleString()} ${c.lookups === 1 ? "site" : "sites"} with no address I can look up`);
   return parts.join(", ");
 }
 
 export function GuidedTidyCard({ supabase, canEdit = false, onOpen, refreshSignal }: GuidedTidyCardProps): JSX.Element | null {
   const [plan, setPlan] = useState<GuidedPlan | null>(null);
+  const [lookups, setLookups] = useState(0);
 
   useEffect(() => {
     if (!supabase || !canEdit) return;
@@ -36,7 +38,10 @@ export function GuidedTidyCard({ supabase, canEdit = false, onOpen, refreshSigna
     (async () => {
       try {
         const rows = await fetchCanonicalRows(supabase as unknown as CanonicalFetchClient, "sites");
-        if (!cancelled) setPlan(planSiteTidy(rows as unknown as GuidedSiteRow[]));
+        if (!cancelled) {
+          setPlan(planSiteTidy(rows as unknown as GuidedSiteRow[]));
+          setLookups(draftCandidates(rows as unknown as GuidedSiteRow[]).length);
+        }
       } catch {
         if (!cancelled) setPlan(null);
       }
@@ -44,14 +49,14 @@ export function GuidedTidyCard({ supabase, canEdit = false, onOpen, refreshSigna
     return () => { cancelled = true; };
   }, [supabase, canEdit, refreshSignal]);
 
-  if (!canEdit || !plan || (plan.proposals.length === 0 && plan.questions.length === 0)) return null;
+  if (!canEdit || !plan || (plan.proposals.length === 0 && plan.questions.length === 0 && lookups === 0)) return null;
 
   const { sure, check, questions, sites } = plan.counts;
   return (
     <div className="eq-gt-card">
       <div className="eq-gt-card__main">
-        <p className="eq-gt-card__title">I can tidy up {plural(sites, "site")} for you</p>
-        <p className="eq-gt-card__detail">{describeCounts({ sure, check, questions })}. Nothing changes until you approve it.</p>
+        <p className="eq-gt-card__title">{sites > 0 ? `I can tidy up ${plural(sites, "site")} for you` : "I can help fill in site addresses"}</p>
+        <p className="eq-gt-card__detail">{describeCounts({ sure, check, questions, lookups })}. Nothing changes until you approve it.</p>
       </div>
       <button type="button" className="eq-intake-btn-primary" onClick={onOpen}>Review</button>
     </div>
