@@ -126,6 +126,7 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
   const [aiSelected, setAiSelected] = useState<Set<string>>(new Set());
   const [aiBusy, setAiBusy] = useState(false);
   const [aiNote, setAiNote] = useState<string | null>(null);
+  const [aiProgress, setAiProgress] = useState<{ checked: number; total: number } | null>(null);
   const rowsRef = useRef<GuidedSiteRow[]>([]);
 
   const knownIds = useRef<Set<string>>(new Set());
@@ -170,12 +171,13 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
   const lookUp = async (): Promise<void> => {
     setAiBusy(true);
     setAiNote(null);
+    setAiProgress({ checked: 0, total: candidates.length });
     try {
       setAiProposals([]);
       setAiSelected(new Set());
       const { proposals: found, failed } = await lookupAddresses(candidates, undefined, (p) => {
         setAiProposals(p.proposals);
-        setAiNote(`Searching… ${p.checked} of ${p.total} checked.`);
+        setAiProgress({ checked: p.checked, total: p.total });
       });
       setAiProposals(found);
       const sites = new Set(found.map((p) => p.row_id)).size;
@@ -187,6 +189,7 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
       setAiNote(e instanceof Error ? e.message : "The address lookup didn't work this time.");
     } finally {
       setAiBusy(false);
+      setAiProgress(null);
     }
   };
 
@@ -291,7 +294,7 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
             items={check} selected={selected} onToggle={toggle} onToggleAll={toggleAll} disabled={!canEdit || busy}
           />
 
-          {canEdit && candidates.length > 0 && aiProposals.length === 0 && (
+          {canEdit && candidates.length > 0 && (aiProposals.length === 0 || aiBusy) && (
             <section className="eq-gt-section">
               <div className="eq-gt-section__head">
                 <div>
@@ -304,7 +307,18 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
                   {aiBusy ? "Searching…" : "Look up addresses"}
                 </button>
               </div>
-              {aiNote && <p className="eq-gt__detail">{aiNote}</p>}
+              {aiProgress && (
+                <div className="eq-gt-progress" role="status">
+                  <div className="eq-gt-progress__row">
+                    <span className="eq-gt-spinner" aria-hidden="true" />
+                    <span>Searching the web… {aiProgress.checked} of {aiProgress.total} sites checked. This takes about a minute.</span>
+                  </div>
+                  <div className="eq-gt-progress__track" aria-hidden="true">
+                    <div className="eq-gt-progress__fill" style={{ width: `${aiProgress.total === 0 ? 0 : Math.round((aiProgress.checked / aiProgress.total) * 100)}%` }} />
+                  </div>
+                </div>
+              )}
+              {aiNote && !aiBusy && <p className="eq-gt__detail">{aiNote}</p>}
             </section>
           )}
           <Section
@@ -312,7 +326,7 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
             sub="Found by searching the web. Each one shows the page it came from. Open it and check before you tick it."
             items={aiProposals} selected={aiSelected} onToggle={toggleAi} onToggleAll={toggleAllAi} disabled={!canEdit || busy}
           />
-          {aiNote && aiProposals.length > 0 && <p className="eq-gt__detail">{aiNote}</p>}
+          {aiNote && !aiBusy && aiProposals.length > 0 && <p className="eq-gt__detail">{aiNote}</p>}
 
           {plan.questions.length > 0 && (
             <section className="eq-gt-section">
