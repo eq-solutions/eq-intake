@@ -24,7 +24,7 @@ describe("address lookup", () => {
     const f: LookupFetch = async (url, init) => { seen = { url, credentials: init.credentials }; return { ok: true, status: 200, json: async () => body }; };
     const out = await lookupAddresses(cands, f);
     expect(seen).toEqual({ url: "/api/anthropic-proxy/messages", credentials: "include" });
-    expect(out.proposals).toHaveLength(4);
+    expect(out.proposals).toHaveLength(5);
     expect(out.failed).toBe(0);
   });
 

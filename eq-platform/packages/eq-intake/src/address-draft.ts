@@ -18,6 +18,8 @@ export const DRAFT_MODEL = 'claude-haiku-4-5';
 export interface DraftCandidate {
   id: string;
   name: string;
+  /** What the site's notes say now, so the source line is added to it, never over it. */
+  notes?: string | null;
 }
 
 const blank = (v: unknown): boolean => v == null || String(v).trim() === '';
@@ -27,7 +29,7 @@ export function draftCandidates(allRows: readonly SiteRow[]): DraftCandidate[] {
   const { live } = splitRetired('sites', allRows as unknown as Array<Record<string, unknown>>) as { live: unknown[] };
   return (live as SiteRow[])
     .filter((s) => !blank(s.name) && blank(s.address_line_1) && blank(s.suburb) && blank(s.state) && blank(s.postcode))
-    .map((s) => ({ id: s.site_id, name: String(s.name).trim() }))
+    .map((s) => ({ id: s.site_id, name: String(s.name).trim(), notes: blank(s.notes) ? null : String(s.notes) }))
     .sort((a, b) => a.name.localeCompare(b.name))
     .slice(0, MAX_DRAFT_SITES);
 }
@@ -75,6 +77,11 @@ function parseJson(text: string): unknown {
 
 const clean = (v: unknown): string => String(v ?? '').replace(/\s+/g, ' ').trim();
 
+/** YYYY-MM-DD in Sydney, so a lookup at 5am there is not dated the day before. */
+function sydneyDate(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(d);
+}
+
 export function hostOf(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
 }
@@ -82,7 +89,7 @@ export function hostOf(url: string): string {
 export type DraftProposal = Proposal & { source: string };
 
 /** Turns the model's reply into suggestions, dropping everything that does not check out. */
-export function draftProposals(response: unknown, candidates: readonly DraftCandidate[]): DraftProposal[] {
+export function draftProposals(response: unknown, candidates: readonly DraftCandidate[], today: Date = new Date()): DraftProposal[] {
   const blocks = ((response as { content?: unknown })?.content ?? []) as Block[];
   if (!Array.isArray(blocks)) return [];
   const urls = resultUrls(blocks);
@@ -115,6 +122,14 @@ export function draftProposals(response: unknown, candidates: readonly DraftCand
         old_value: null, new_value: value, tier: 'check', kind: 'ai_draft', why, source,
       });
     }
+    // Keep where the address came from, so a wrong one can be checked later. Added to any existing note.
+    const line = `Address found by AI lookup on ${sydneyDate(today)} from ${source}`;
+    const existing = blank(cand.notes) ? null : String(cand.notes);
+    out.push({
+      id: `${cand.id}:ai:notes`, row_id: cand.id, row_label: cand.name, field: 'notes',
+      old_value: existing, new_value: existing ? `${existing}\n${line}` : line,
+      tier: 'check', kind: 'ai_draft', why: 'Keeps the page the address came from', source,
+    });
   }
   return out;
 }

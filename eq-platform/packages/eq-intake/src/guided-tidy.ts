@@ -26,7 +26,7 @@ import { knownSuburb } from './au-suburbs.js';
 
 export type Tier = 'sure' | 'check';
 export type ProposalKind = 'from_address' | 'from_suburb' | 'format' | 'spelling' | 'ai_draft';
-export type SiteField = 'name' | 'address_line_1' | 'address_line_2' | 'suburb' | 'state' | 'postcode';
+export type SiteField = 'name' | 'address_line_1' | 'address_line_2' | 'suburb' | 'state' | 'postcode' | 'notes';
 
 export interface SiteRow {
   site_id: string;
@@ -36,6 +36,7 @@ export interface SiteRow {
   suburb?: string | null;
   state?: string | null;
   postcode?: string | null;
+  notes?: string | null;
   active?: boolean | null;
 }
 
@@ -400,6 +401,7 @@ export const FIELD_LABEL: Record<SiteField, string> = {
   suburb: 'Suburb',
   state: 'State',
   postcode: 'Postcode',
+  notes: 'Note',
 };
 
 /**
