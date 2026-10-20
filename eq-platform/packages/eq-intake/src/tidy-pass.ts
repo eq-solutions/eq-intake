@@ -332,7 +332,7 @@ async function scanEntity(
     const label    = rowLabel(original, entity);
 
     for (const [field, newVal] of Object.entries(vrow.canonical)) {
-      if (SYSTEM_FIELDS.has(field)) continue;
+      if (SYSTEM_FIELDS.has(field) || KEEPS_LIVE_SPELLING.has(`${table}:${field}`)) continue;
       const oldRaw = stringify(original[field]);
       const newRaw = stringify(newVal);
       if (oldRaw !== newRaw && newRaw !== '') {
@@ -365,7 +365,7 @@ async function scanEntity(
 
     // Coercion diffs (same logic as valid_rows above)
     for (const [field, newVal] of Object.entries(frow.canonical)) {
-      if (SYSTEM_FIELDS.has(field)) continue;
+      if (SYSTEM_FIELDS.has(field) || KEEPS_LIVE_SPELLING.has(`${table}:${field}`)) continue;
       const oldRaw = stringify(original[field]);
       const newRaw = stringify(newVal);
       if (oldRaw !== newRaw && newRaw !== '') {
@@ -457,6 +457,14 @@ async function scanEntity(
 const DEFAULT_ENTITIES: TidyEntity[] = [
   'customer', 'site', 'contact', 'staff', 'licence', 'asset',
 ];
+
+/**
+ * Fields where the schema's code-style spelling (labour_hire, apprentice) is not what the live
+ * system stores or shows ("Labour Hire", "Apprentice": Shell's staff editor offers exactly those).
+ * Rewriting them is cosmetic at best and splits people into two spellings at worst, so Tidy
+ * leaves them as they are.
+ */
+export const KEEPS_LIVE_SPELLING: ReadonlySet<string> = new Set(['staff:employment_type']);
 
 export async function runTidyPass(opts: TidyPassOpts): Promise<TidyReport> {
   const entities = opts.entities ?? DEFAULT_ENTITIES;
