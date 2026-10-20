@@ -56,6 +56,19 @@ export const FLAG_KIND: Record<string, string> = {
   cross_field_warning: "Doesn't match another detail",
 };
 
+/** What the small note beside a record count says about the ones left out of it. */
+export function hiddenNote(entity: string, n: number): string {
+  if (entity === "staff") return `${n} who have left hidden`;
+  if (entity === "sites") return `${n} merged hidden`;
+  return `${n} inactive hidden`;
+}
+
+export function hiddenNoteTitle(entity: string): string {
+  if (entity === "staff") return "People who have left. Not counted or checked for missing details.";
+  if (entity === "sites") return "Merged into another record, so not counted or checked for duplicates";
+  return "Marked inactive, so not counted or checked for missing details";
+}
+
 export const plainCounts = {
   fixes: (n: number): string => `${n.toLocaleString()} quick ${n === 1 ? "fix" : "fixes"}`,
   gaps: (n: number): string => `${n.toLocaleString()} missing ${n === 1 ? "detail" : "details"}`,
