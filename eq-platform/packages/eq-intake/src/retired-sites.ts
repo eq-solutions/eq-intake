@@ -12,9 +12,17 @@ export interface RetiredSplit<T> {
   retired: number;
 }
 
-/** Sites only: a row is retired when `active` is exactly false. Rows without the field stay. */
+/**
+ * Entities where `active = false` means "no longer part of the working set": a merged site, a
+ * person who has left, a customer or contact archived, an asset taken off the books. Their gaps
+ * are not work to do (SKS: 44 of 119 staff records are leavers, so "56 missing an emergency
+ * contact" was really 24). Licences have no such flag.
+ */
+const HAS_ACTIVE_FLAG = new Set(["sites", "staff", "customers", "contacts", "assets"]);
+
+/** A row is retired when `active` is exactly false. Rows without the field stay. */
 export function splitRetired<T extends Record<string, unknown>>(entity: string, rows: readonly T[]): RetiredSplit<T> {
-  if (entity !== "sites") return { live: [...rows], retired: 0 };
+  if (!HAS_ACTIVE_FLAG.has(entity)) return { live: [...rows], retired: 0 };
   const live = rows.filter((r) => r["active"] !== false);
   return { live, retired: rows.length - live.length };
 }

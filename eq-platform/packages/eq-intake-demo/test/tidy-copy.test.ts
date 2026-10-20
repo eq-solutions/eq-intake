@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { FLAG_KIND, GAP_KIND, TIDY_WORDS, fixReason, plainCounts } from "../src/module/tidy-copy.js";
+import { FLAG_KIND, GAP_KIND, TIDY_WORDS, fixReason, hiddenNote, plainCounts } from "../src/module/tidy-copy.js";
 
 const fix = (fix_type: string, old_value: string | null, new_value: string | null) => ({ fix_type, old_value, new_value });
 
@@ -14,6 +14,14 @@ describe("why a quick fix is being made", () => {
     expect(fixReason(fix("other", "Labour Hire", "labour_hire"))).toBe("Only the capital letters or spacing change, not the meaning");
     expect(fixReason(fix("other", "Acme ", "Acme"))).toBe("Extra spaces removed");
     expect(fixReason(fix("other", "Direct", "Employee"))).toBe("Written the way the template expects");
+  });
+});
+
+describe("the note about records left out of a count", () => {
+  it("says who was left out in words that fit the list", () => {
+    expect(hiddenNote("staff", 44)).toBe("44 who have left hidden");
+    expect(hiddenNote("sites", 54)).toBe("54 merged hidden");
+    expect(hiddenNote("customers", 9)).toBe("9 inactive hidden");
   });
 });
 

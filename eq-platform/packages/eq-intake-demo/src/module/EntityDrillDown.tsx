@@ -32,7 +32,7 @@ import type {
 } from "@eq/intake";
 import type { SupabaseLikeClient } from "../canonical/commit-canonical.js";
 import { fieldLabel } from "../shared/entity-label.js";
-import { FIX_HEADERS, FLAG_KIND, GAP_KIND, TIDY_WORDS, fixReason, plainCounts } from "./tidy-copy.js";
+import { FIX_HEADERS, FLAG_KIND, GAP_KIND, TIDY_WORDS, fixReason, hiddenNote, hiddenNoteTitle, plainCounts } from "./tidy-copy.js";
 import { Table, type TableColumn } from "@eq-solutions/ui/Table";
 
 export interface EntityDrillDownProps {
@@ -1353,8 +1353,8 @@ export function EntityDrillDown({
               </span>
             )}
             {retiredCount > 0 && (
-              <span className="eq-drill__retired-note" title="Merged into another record, so not counted or checked for duplicates">
-                {retiredCount} merged hidden
+              <span className="eq-drill__retired-note" title={hiddenNoteTitle(entity)}>
+                {hiddenNote(entity, retiredCount)}
               </span>
             )}
           </h2>
