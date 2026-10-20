@@ -21,6 +21,15 @@ function fakeClient(staffRows: Record<string, unknown>[]): SupabaseLikeClient {
   return fakeEntityRpc({ staff: staffRows }, { canViewPii: true }).client;
 }
 
+import { KEEPS_LIVE_SPELLING } from "../src/tidy-pass.js";
+
+describe("fields Tidy must not respell", () => {
+  it("leaves staff employment type in the spelling Shell shows and stores", () => {
+    expect(KEEPS_LIVE_SPELLING.has("staff:employment_type")).toBe(true);
+    expect(KEEPS_LIVE_SPELLING.has("staff:phone")).toBe(false);
+  });
+});
+
 describe("runTidyPass — required-field gaps", () => {
   it("classifies a missing required field as required_missing, not format_invalid", async () => {
     const client = fakeClient([
