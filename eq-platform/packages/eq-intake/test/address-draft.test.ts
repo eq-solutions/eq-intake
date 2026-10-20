@@ -15,13 +15,14 @@ const found = (o: Record<string, unknown> = {}) => ({ id: "a", status: "found", 
 describe("who gets an address lookup", () => {
   it("only live sites with a name and every address field blank", () => {
     const list = draftCandidates([
-      row("1"),
+      row("1", { notes: "  " }),
       row("2", { address_line_1: "1 Smith St" }),
       row("3", { suburb: "Huntingwood" }),
       row("4", { name: "  " }),
       row("5", { active: false }),
     ]);
     expect(list.map((c) => c.id)).toEqual(["1"]);
+    expect(draftCandidates([row("9", { notes: "Gate code" })])[0]!.notes).toBe("Gate code");
   });
 
   it("asks for the web search tool and a source for each", () => {
@@ -34,9 +35,24 @@ describe("who gets an address lookup", () => {
 
 describe("checking what the model says", () => {
   it("turns a confirmed address into four suggestions that are checks with the source", () => {
-    const ps = draftProposals(reply([found()]), cands);
-    expect(ps.map((p) => `${p.field}=${p.new_value}`)).toEqual(["address_line_1=6 Everton Rd", "suburb=Strathfield", "state=NSW", "postcode=2135"]);
+    const ps = draftProposals(reply([found()]), cands, new Date("2026-10-20T00:00:00Z"));
+    expect(ps.map((p) => `${p.field}=${p.new_value}`)).toEqual([
+      "address_line_1=6 Everton Rd", "suburb=Strathfield", "state=NSW", "postcode=2135",
+      "notes=Address found by AI lookup on 2026-10-20 from https://www.healthdirect.gov.au/x",
+    ]);
     expect(ps.every((p) => p.tier === "check" && p.kind === "ai_draft" && p.old_value === null && p.source === "https://www.healthdirect.gov.au/x")).toBe(true);
+  });
+
+  it("adds the source to a note that is already there, never over it", () => {
+    const withNote = [{ id: "a", name: "Strathfield Private Hospital", notes: "Gate code on card" }];
+    const notes = draftProposals(reply([found()]), withNote, new Date("2026-10-20T00:00:00Z")).find((p) => p.field === "notes")!;
+    expect(notes.old_value).toBe("Gate code on card");
+    expect(notes.new_value).toBe("Gate code on card\nAddress found by AI lookup on 2026-10-20 from https://www.healthdirect.gov.au/x");
+  });
+
+  it("dates the note in Sydney, not UTC", () => {
+    const n = draftProposals(reply([found()]), cands, new Date("2026-10-19T20:30:00Z")).find((p) => p.field === "notes")!;
+    expect(n.new_value).toContain("on 2026-10-20 ");
   });
 
   it("drops not_sure answers, unknown ids and missing parts", () => {
