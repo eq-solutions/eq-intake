@@ -32,6 +32,7 @@ import type {
 } from "@eq/intake";
 import type { SupabaseLikeClient } from "../canonical/commit-canonical.js";
 import { fieldLabel } from "../shared/entity-label.js";
+import { FIX_HEADERS, FLAG_KIND, GAP_KIND, TIDY_WORDS, fixReason, plainCounts } from "./tidy-copy.js";
 import { Table, type TableColumn } from "@eq-solutions/ui/Table";
 
 export interface EntityDrillDownProps {
@@ -1657,29 +1658,8 @@ interface TidyPanelProps {
   bulkError: string | null;
 }
 
-const FIX_TYPE_LABELS: Record<string, string> = {
-  phone: "Phone",
-  au_state: "State",
-  email: "Email",
-  abn: "ABN",
-  date: "Date",
-  string: "Text",
-  boolean: "Boolean",
-  other: "Other",
-};
-
-const GAP_TYPE_LABELS: Record<string, string> = {
-  required_missing: "Missing",
-  format_invalid: "Invalid format",
-  fk_no_match: "Broken link",
-};
-
-const FLAG_TYPE_LABELS: Record<string, string> = {
-  phone_kept_raw: "Phone kept raw",
-  date_ambiguous: "Date ambiguous",
-  value_unusual: "Unusual value",
-  cross_field_warning: "Cross-field",
-};
+const GAP_TYPE_LABELS = GAP_KIND;
+const FLAG_TYPE_LABELS = FLAG_KIND;
 
 function TidyPanel({
   loading,
@@ -1718,7 +1698,7 @@ function TidyPanel({
       <div className="eq-tidy">
         <div className="eq-tidy__loading">
           <span className="eq-health-spinner" aria-hidden="true" />
-          <span>{progress || "Scanning…"}</span>
+          <span>{progress || TIDY_WORDS.scanning}</span>
         </div>
       </div>
     );
@@ -1728,7 +1708,7 @@ function TidyPanel({
     return (
       <div className="eq-tidy">
         <div className="eq-drill__error" role="alert">
-          <strong>Tidy pass error:</strong> {error}
+          <strong>{TIDY_WORDS.failed}</strong> {error}
         </div>
       </div>
     );
@@ -1755,35 +1735,31 @@ function TidyPanel({
   const fixColumns: TableColumn<TidyFix>[] = [
     {
       key: "row_label",
-      header: "Record",
+      header: FIX_HEADERS.who,
       sortAccessor: (f) => f.row_label,
       filterable: "text",
     },
     {
       key: "field",
-      header: "Field",
+      header: FIX_HEADERS.what,
       sortAccessor: (f) => f.field,
       render: (f) => <span>{fieldLabel(f.field)}</span>,
     },
     {
       key: "old_value",
-      header: "Current",
+      header: FIX_HEADERS.now,
       render: (f) => <span className="eq-tidy__old-value">{f.old_value}</span>,
     },
     {
       key: "new_value",
-      header: "Normalised",
+      header: FIX_HEADERS.will,
       render: (f) => <span className="eq-tidy__new-value">{f.new_value}</span>,
     },
     {
       key: "fix_type",
-      header: "Type",
+      header: FIX_HEADERS.why,
       sortable: false,
-      render: (f) => (
-        <span className="eq-tidy__fix-badge">
-          {FIX_TYPE_LABELS[f.fix_type] ?? f.fix_type}
-        </span>
-      ),
+      render: (f) => <span className="eq-tidy__fix-reason">{fixReason(f)}</span>,
     },
   ];
 
@@ -1813,12 +1789,12 @@ function TidyPanel({
     },
     {
       key: "message",
-      header: "Issue",
+      header: "What's wrong",
       render: (g) => <span>{g.message}</span>,
     },
     {
       key: "gap_type",
-      header: "Type",
+      header: "Kind",
       sortable: false,
       render: (g) => (
         <span className={`eq-tidy__gap-badge eq-tidy__gap-badge--${g.gap_type}`}>
@@ -1934,26 +1910,26 @@ function TidyPanel({
         </span>
         {auto_fixes.length > 0 && (
           <span className="eq-tidy__count eq-tidy__count--fix">
-            {auto_fixes.length} auto-fixable
+            {plainCounts.fixes(auto_fixes.length)}
           </span>
         )}
         {gaps.length > 0 && (
           <span className="eq-tidy__count eq-tidy__count--gap">
-            {gaps.length} gap{gaps.length !== 1 ? "s" : ""}
+            {plainCounts.gaps(gaps.length)}
           </span>
         )}
         {review_flags.length > 0 && (
           <span className="eq-tidy__count eq-tidy__count--flag">
-            {review_flags.length} need review
+            {plainCounts.review(review_flags.length)}
           </span>
         )}
         {not_scanned.length > 0 && (
           <span className="eq-tidy__count eq-tidy__count--flag">
-            {not_scanned.length} not scanned
+            {plainCounts.notScanned(not_scanned.length)}
           </span>
         )}
         {allClean && (
-          <span className="eq-tidy__count eq-tidy__count--ok">All clean</span>
+          <span className="eq-tidy__count eq-tidy__count--ok">{TIDY_WORDS.allGood}</span>
         )}
       </div>
 
@@ -1980,10 +1956,8 @@ function TidyPanel({
         <div className="eq-tidy__section">
           <div className="eq-tidy__section-header">
             <div className="eq-tidy__section-header-text">
-              <h3 className="eq-tidy__section-title">Auto-fixes</h3>
-              <p className="eq-tidy__section-hint">
-                These values can be normalised automatically. Select the ones to apply.
-              </p>
+              <h3 className="eq-tidy__section-title">{TIDY_WORDS.fixesTitle}</h3>
+              <p className="eq-tidy__section-hint">{TIDY_WORDS.fixesHint}</p>
             </div>
           </div>
 
@@ -1994,7 +1968,7 @@ function TidyPanel({
             selectable
             selectedIds={selectedFixKeys}
             onSelectionChange={onSelectionChange}
-            emptyMessage="No auto-fixes found."
+            emptyMessage="No quick fixes found."
             className="eq-tidy__table"
           />
 
@@ -2017,7 +1991,7 @@ function TidyPanel({
             >
               {committing
                 ? "Applying…"
-                : `Apply ${selectedFixKeys.size} fix${selectedFixKeys.size !== 1 ? "es" : ""}`}
+                : `Apply ${selectedFixKeys.size} change${selectedFixKeys.size !== 1 ? "s" : ""}`}
             </button>
           </div>
         </div>
@@ -2043,12 +2017,8 @@ function TidyPanel({
             <>
               <div className="eq-tidy__section-header">
                 <div className="eq-tidy__section-header-text">
-                  <h3 className="eq-tidy__section-title">Data gaps</h3>
-                  <p className="eq-tidy__section-hint">
-                    Missing required fields or invalid formats. Fix one at a time below, use "Fill
-                    in bulk" for a field with several gaps, or download this list and re-upload it
-                    on the Reconcile tab.
-                  </p>
+                  <h3 className="eq-tidy__section-title">{TIDY_WORDS.gapsTitle}</h3>
+                  <p className="eq-tidy__section-hint">{TIDY_WORDS.gapsHint}</p>
                 </div>
                 <button
                   type="button"
@@ -2104,10 +2074,8 @@ function TidyPanel({
         <div className="eq-tidy__section">
           <div className="eq-tidy__section-header">
             <div className="eq-tidy__section-header-text">
-              <h3 className="eq-tidy__section-title">Needs review</h3>
-              <p className="eq-tidy__section-hint">
-                These could not be auto-fixed — a human should check them.
-              </p>
+              <h3 className="eq-tidy__section-title">{TIDY_WORDS.reviewTitle}</h3>
+              <p className="eq-tidy__section-hint">{TIDY_WORDS.reviewHint}</p>
             </div>
           </div>
           <Table<ReviewFlag>

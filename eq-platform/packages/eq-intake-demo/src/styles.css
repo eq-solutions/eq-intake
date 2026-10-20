@@ -5398,3 +5398,4 @@ button.eq-primary:hover {
   .eq-gt-spinner { animation: none; }
   .eq-gt-progress__fill { transition: none; }
 }
+.eq-tidy__fix-reason { font-size: 13px; color: var(--eq-ink); }
