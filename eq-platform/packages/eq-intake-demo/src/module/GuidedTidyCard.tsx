@@ -40,7 +40,9 @@ export function GuidedTidyCard({ supabase, canEdit = false, onOpen, refreshSigna
         const rows = await fetchCanonicalRows(supabase as unknown as CanonicalFetchClient, "sites");
         if (!cancelled) {
           setPlan(planSiteTidy(rows as unknown as GuidedSiteRow[]));
-          setLookups(draftCandidates(rows as unknown as GuidedSiteRow[]).length);
+          const own = planSiteTidy(rows as unknown as GuidedSiteRow[]);
+          const fromTwin = new Set(own.proposals.filter((p) => p.field === "address_line_1").map((p) => p.row_id));
+          setLookups(draftCandidates(rows as unknown as GuidedSiteRow[]).filter((c) => !fromTwin.has(c.id)).length);
         }
       } catch {
         if (!cancelled) setPlan(null);

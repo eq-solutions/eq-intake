@@ -197,12 +197,13 @@ export function buildOverviewWork(input: OverviewWorkInput): OverviewWork {
 
   // ── Duplicates (only once scanned) ───────────────────────────────────────
   for (const r of dupes ?? []) {
-    if (r.clusters.length === 0) continue;
-    const n = r.needs_reconcile > 0 ? r.needs_reconcile : r.clusters.length;
+    // A group already down to one live record that holds everything needs nobody: it was merged.
+    if (r.clusters.length === 0 || r.needs_reconcile === 0) continue;
+    const n = r.needs_reconcile;
     items.push({
       id: `dupes.${r.entity}`, kind: 'decide', rank: 2, count: n, entity: r.entity,
       title: `Decide on ${n} possible ${labels.entity(r.entity).toLowerCase()} ${plural(n, 'duplicate', 'duplicates')}`,
-      detail: r.needs_reconcile > 0 ? 'The kept record needs choosing.' : 'Merge, archive or keep both.',
+      detail: 'The kept record needs choosing.',
       actionLabel: `Review ${n}`,
     });
   }

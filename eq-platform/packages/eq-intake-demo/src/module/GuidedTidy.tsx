@@ -164,7 +164,10 @@ export function GuidedTidy({ supabase, tenantId, canEdit = false, onBack, onData
   );
   const aiChosen = useMemo(() => aiProposals.filter((p) => aiSelected.has(p.id)), [aiProposals, aiSelected]);
   const chosen = useMemo(() => [...(plan?.proposals ?? []).filter((p) => selected.has(p.id)), ...answered, ...aiChosen], [plan, selected, answered, aiChosen]);
-  const candidates = useMemo(() => draftCandidates(rowsRef.current), [plan]);
+  const candidates = useMemo(() => {
+    const fromTwin = new Set((plan?.proposals ?? []).filter((p) => p.field === "address_line_1").map((p) => p.row_id));
+    return draftCandidates(rowsRef.current).filter((c) => !fromTwin.has(c.id));
+  }, [plan]);
   const toggleAi = (id: string): void => setAiSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const toggleAllAi = (ids: string[], on: boolean): void => setAiSelected((s) => { const n = new Set(s); for (const id of ids) { if (on) n.add(id); else n.delete(id); } return n; });
 
