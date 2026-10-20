@@ -121,6 +121,18 @@ describe("detectForEntity — sites: already-resolved cluster is not noise", () 
   });
 });
 
+describe("detectForEntity — a merge note is not detail", () => {
+  it("does not flag a merged pair just because the retired twin carries the 'Soft-retired' note", () => {
+    const rows = [
+      { site_id: "live", name: "Depot North", customer_id: "c1", active: true, address_line_1: "1 Main St", suburb: "Ryde" },
+      { site_id: "old", name: "Depot North", customer_id: "c1", active: false, address_line_1: "1 Main St", suburb: "Ryde", notes: "[2026-07-28] Soft-retired: duplicate of Depot North, survivor abc", external_id: "X1", intake_id: "i1" },
+    ];
+    const report = detectForEntity("sites", rows);
+    expect(report.clusters[0]!.needs_reconcile).toBe(false);
+    expect(report.needs_reconcile).toBe(0);
+  });
+});
+
 describe("detectForEntity — survivor selection", () => {
   it("prefers the customer-linked row even when it is retired", () => {
     const rows = [

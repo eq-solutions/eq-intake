@@ -142,9 +142,17 @@ function isBlank(v: unknown): boolean {
  *  detectAllDuplicates reads every non-PII column (nonPiiColumns), so the
  *  count — and therefore the suggested survivor — is the same whoever runs
  *  the scan, with or without entity.view_pii. */
+/** Columns that say nothing about how complete a record is: ids, import stamps, and `notes`
+ *  (a merge writes "Soft-retired: duplicate of ..." there, which made every retired twin look
+ *  more complete than the live record it was merged into). */
+const NOT_DETAIL = new Set([
+  'notes', 'external_id', 'external_customer_id', 'tenant_id', 'imported_at', 'imported_from', 'intake_id',
+  'schema_version', 'created_at', 'updated_at', 'created_by', 'updated_by', 'deleted_at', 'active', 'slug',
+]);
+
 function completenessOf(row: EntityRow): number {
   let n = 0;
-  for (const v of Object.values(row)) if (!isBlank(v)) n++;
+  for (const [k, v] of Object.entries(row)) if (!NOT_DETAIL.has(k) && !isBlank(v)) n++;
   return n;
 }
 

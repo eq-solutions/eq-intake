@@ -25,7 +25,7 @@ import { splitRetired } from './retired-sites.js';
 import { knownSuburb } from './au-suburbs.js';
 
 export type Tier = 'sure' | 'check';
-export type ProposalKind = 'from_address' | 'from_suburb' | 'format' | 'spelling' | 'ai_draft';
+export type ProposalKind = 'from_address' | 'from_suburb' | 'format' | 'spelling' | 'ai_draft' | 'from_twin';
 export type SiteField = 'name' | 'address_line_1' | 'address_line_2' | 'suburb' | 'state' | 'postcode' | 'notes';
 
 export interface SiteRow {
@@ -95,6 +95,8 @@ const STREET_WORDS = new Set([
 
 const blank = (v: unknown): boolean => v === null || v === undefined || String(v).trim() === '';
 const clean = (v: unknown): string => String(v ?? '').replace(/\s+/g, ' ').trim();
+
+const filled = (r: SiteRow): number => (['address_line_1', 'suburb', 'state', 'postcode'] as const).filter((f) => !blank(r[f])).length;
 
 function label(r: SiteRow): string {
   return clean(r.name) || 'Unnamed site';
@@ -251,6 +253,13 @@ export function respell(text: string, vocab: ReadonlyMap<string, number>): { fix
 export function planSiteTidy(allRows: readonly SiteRow[]): GuidedPlan {
   const { live: rows } = splitRetired('sites', allRows as unknown as Array<Record<string, unknown>>) as { live: unknown[] };
   const sites = rows as SiteRow[];
+  const nameKey = (v: unknown): string => clean(v).toLowerCase();
+  const twinsByName = new Map<string, SiteRow[]>();
+  for (const r of allRows) {
+    if (r.active !== false || blank(r.name)) continue;
+    const k = nameKey(r.name);
+    twinsByName.set(k, [...(twinsByName.get(k) ?? []), r]);
+  }
 
   const knownSuburbs = new Set<string>();
   for (const s of sites) if (!blank(s.suburb)) knownSuburbs.add(clean(s.suburb).toLowerCase());
@@ -303,6 +312,25 @@ export function planSiteTidy(allRows: readonly SiteRow[]): GuidedPlan {
     }
     if (!blank(s.name) && clean(s.name) !== String(s.name)) {
       add({ field: 'name', old_value: String(s.name), new_value: clean(s.name), tier: 'sure', kind: 'format', why: 'Removed extra spaces' });
+    }
+
+    // 1b. The retired copy of this same site (left behind by an earlier merge) may hold the address
+    //     this one lacks. Only when this one has no street address at all, so the two can't be
+    //     different places, and only from a single clear twin.
+    if (blank(s.address_line_1) && !blank(s.name)) {
+      const twins = (twinsByName.get(nameKey(s.name)) ?? []).filter((t) => !blank(t.address_line_1));
+      const richest = [...twins].sort((a, b) => filled(b) - filled(a));
+      const best = richest[0];
+      const clash = richest.some((t) => t !== best && clean(t.address_line_1) !== clean(best?.address_line_1));
+      if (best && !clash) {
+        for (const field of ['address_line_1', 'suburb', 'state', 'postcode'] as const) {
+          const v = best[field];
+          if (blank(s[field]) && !blank(v)) {
+            add({ field, old_value: null, new_value: clean(v).replace(/[,.\s]+$/, ''), tier: 'check', kind: 'from_twin',
+              why: 'The retired copy of this site, merged earlier, has this' });
+          }
+        }
+      }
     }
 
     // 2. Fill blanks from the address (sure when it is spelled out, else check).

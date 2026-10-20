@@ -164,6 +164,38 @@ describe("applying and undoing", () => {
   });
 });
 
+describe("filling from the retired copy of the same site", () => {
+  const retired = (id: string, o: Partial<SiteRow> = {}): SiteRow => ({ site_id: id, name: "Norwest CBA Data Centre", active: false, ...o });
+
+  it("offers the retired twin's address when the live site has none", () => {
+    const plan = planSiteTidy([
+      site("live", { name: "Norwest CBA Data Centre" }),
+      retired("old", { address_line_1: "11 Irvine Place", suburb: "Bella Vista", state: "NSW", postcode: "2153" }),
+    ]);
+    expect(plan.proposals.filter((p) => p.row_id === "live").map((p) => `${p.field}=${p.new_value}`).sort())
+      .toEqual(["address_line_1=11 Irvine Place", "postcode=2153", "state=NSW", "suburb=Bella Vista"]);
+    expect(get(plan, "live", "address_line_1")).toMatchObject({ tier: "check", kind: "from_twin" });
+  });
+
+  it("drops a trailing comma the old record carried", () => {
+    const plan = planSiteTidy([site("live", { name: "Norwest CBA Data Centre", address_line_1: "" }), retired("old", { address_line_1: "3 Sydney St," })]);
+    expect(get(plan, "live", "address_line_1")?.new_value).toBe("3 Sydney St");
+  });
+
+  it("matches the name ignoring capitals and spacing, and never fills over a street address", () => {
+    const withTwin = planSiteTidy([site("live", { name: "norwest cba  data centre" }), retired("old", { address_line_1: "11 Irvine Place" })]);
+    expect(get(withTwin, "live", "address_line_1")?.new_value).toBe("11 Irvine Place");
+    const hasAddress = planSiteTidy([site("live", { name: "Norwest CBA Data Centre", address_line_1: "86 Kareena Rd" }), retired("old", { address_line_1: "49 Kareena Rd", postcode: "2229" })]);
+    expect(hasAddress.proposals.some((p) => p.kind === "from_twin")).toBe(false);
+  });
+
+  it("does nothing when two retired twins disagree, or there is no twin", () => {
+    const clash = planSiteTidy([site("live", { name: "Norwest CBA Data Centre" }), retired("a", { address_line_1: "1 A St" }), retired("b", { address_line_1: "2 B St" })]);
+    expect(clash.proposals.some((p) => p.kind === "from_twin")).toBe(false);
+    expect(planSiteTidy([site("live", { name: "Norwest CBA Data Centre" })]).proposals.some((p) => p.kind === "from_twin")).toBe(false);
+  });
+});
+
 describe("postcodes from the built-in suburb list", () => {
   it("fills a blank postcode for a suburb with one postcode, as a check, when no other site answers it", () => {
     const plan = planSiteTidy([site("a", { address_line_1: "35 Huntingwood Drive", suburb: "Huntingwood", state: "NSW", postcode: null })]);

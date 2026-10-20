@@ -47,11 +47,16 @@ describe("buildOverviewWork", () => {
     expect(buildOverviewWork(base).items.some((i) => i.kind === "decide")).toBe(false);
     const w = buildOverviewWork({
       ...base,
-      dupes: [{ entity: "contacts", clusters: [{}, {}, {}] as never, total_records: 206, affected: 6, needs_reconcile: 0 }],
+      dupes: [{ entity: "contacts", clusters: [{}, {}, {}] as never, total_records: 206, affected: 6, needs_reconcile: 3 }],
     });
     const d = w.items.find((i) => i.kind === "decide")!;
     expect(d.count).toBe(3);
     expect(d.title).toBe("Decide on 3 possible contacts duplicates");
+    const merged = buildOverviewWork({
+      ...base,
+      dupes: [{ entity: "sites", clusters: [{}, {}] as never, total_records: 210, affected: 4, needs_reconcile: 0 }],
+    });
+    expect(merged.items.some((i) => i.kind === "decide")).toBe(false);
   });
 
   it("a record with anything to fix is never reported as nothing to fix", () => {
