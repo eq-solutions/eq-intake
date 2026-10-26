@@ -67,21 +67,60 @@ import { extractText } from "npm:unpdf@1.8.0";
 // batch). Vision fallback stays concurrent since that subset is normally
 // empty or small.
 //
-// verify_jwt is OFF: this project's Functions gateway rejects the legacy-
-// format SUPABASE_SERVICE_ROLE_KEY JWT (UNAUTHORIZED_LEGACY_JWT, found live
-// 2026-07-28) even though the same key works fine for normal Postgrest/DB
-// access. Matches the existing precedent of other functions in this project
-// (supervisor-digest, ts-reminder, tafe-weekly-fill, shift-events) that also
-// run with verify_jwt: false. Bounded blast radius: this function has no DB
-// access, so worst case is Anthropic-token abuse, not data exposure. A real
-// shared-secret header should replace this once Royce can add a new Supabase
-// secret via the dashboard (no MCP tool exists for setting secrets).
+// verify_jwt is OFF at the gateway: it rejects the legacy-format HS256 JWTs
+// this project's callers hold (UNAUTHORIZED_LEGACY_JWT, found live
+// 2026-07-28). The function checks the caller itself instead — see "Caller
+// check (SEC-109)" below. Without a signed-in caller's token it returns 401
+// before any Anthropic call.
 // ---------------------------------------------------------------------------
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// ---------------------------------------------------------------------------
+// Caller check (SEC-109). verify_jwt stays OFF at the gateway (it rejects
+// legacy HS256 tokens, and eq-service's Shell-bridged session token is HS256
+// signed with this project's JWT secret, so JWKS cannot verify it either).
+// Instead the function asks this project's own PostgREST to vouch for the
+// caller: PostgREST checks the token signature, and the tm_select RLS policy
+// only returns rows to an `authenticated` token whose tenant has members here.
+// A token from another tenant's project fails the signature check; the anon
+// key and a missing or malformed token return no rows. No new secret: uses
+// the SUPABASE_URL / SUPABASE_ANON_KEY the platform injects. Fails closed.
+// ---------------------------------------------------------------------------
+
+// The only callers are eq-service server actions (no browser Origin); the
+// allowlist exists so a browser from any other site gets no CORS grant.
+const ALLOWED_ORIGINS = new Set(["https://service.eq.solutions", "https://core.eq.solutions"]);
+
+function corsFor(req: Request): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+  const origin = req.headers.get("origin");
+  if (origin && ALLOWED_ORIGINS.has(origin)) headers["Access-Control-Allow-Origin"] = origin;
+  return headers;
+}
+
+async function callerIsSignedIn(req: Request): Promise<boolean> {
+  const m = /^Bearer\s+([\w-]+\.[\w-]+\.[\w-]+)$/i.exec(req.headers.get("authorization") ?? "");
+  if (!m) return false;
+  const url = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!url || !anonKey) {
+    console.error("caller check cannot run: SUPABASE_URL / SUPABASE_ANON_KEY missing");
+    return false;
+  }
+  try {
+    const res = await fetch(`${url}/rest/v1/tenant_members?select=user_id&is_active=eq.true&limit=1`, {
+      headers: { apikey: anonKey, Authorization: `Bearer ${m[1]}`, "Accept-Profile": "service" },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return false;
+    const rows = await res.json();
+    return Array.isArray(rows) && rows.length > 0;
+  } catch {
+    return false;
+  }
+}
 
 const ANTHROPIC_MODEL = "claude-sonnet-4-5";
 const ANTHROPIC_MAX_TOKENS = 8192;
@@ -694,8 +733,16 @@ function groupMappedRows(rows: MappedRow[]): WireBundle[] {
 // ============================================================================
 
 Deno.serve(async (req: Request) => {
+  const CORS = corsFor(req);
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS });
+  }
+
+  if (!(await callerIsSignedIn(req))) {
+    return new Response(
+      JSON.stringify({ error: "Sign in required" }),
+      { status: 401, headers: { ...CORS, "Content-Type": "application/json" } },
+    );
   }
 
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");

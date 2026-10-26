@@ -30,16 +30,59 @@ import { encodeBase64 } from "jsr:@std/encoding/base64";
 // review screen shows it as a pre-ticked, always-editable checkbox. This
 // endpoint never decides what's an RCD, it only flags a best guess.
 //
-// verify_jwt is OFF, matching parse-maximo-pdf-wo in this same project (see
-// that function's header comment for why — this project's Functions gateway
-// rejects the legacy-format SUPABASE_SERVICE_ROLE_KEY JWT). Bounded blast
-// radius: no DB access, worst case is Anthropic-token abuse.
+// verify_jwt is OFF at the gateway, matching parse-maximo-pdf-wo in this same
+// project (it rejects the legacy-format HS256 JWTs callers hold). The function
+// checks the caller itself — see "Caller check (SEC-109)" below. Without a
+// signed-in caller's token it returns 401 before any Anthropic call.
 // ---------------------------------------------------------------------------
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// ---------------------------------------------------------------------------
+// Caller check (SEC-109). verify_jwt stays OFF at the gateway (it rejects
+// legacy HS256 tokens, and eq-service's Shell-bridged session token is HS256
+// signed with this project's JWT secret, so JWKS cannot verify it either).
+// Instead the function asks this project's own PostgREST to vouch for the
+// caller: PostgREST checks the token signature, and the tm_select RLS policy
+// only returns rows to an `authenticated` token whose tenant has members here.
+// A token from another tenant's project fails the signature check; the anon
+// key and a missing or malformed token return no rows. No new secret: uses
+// the SUPABASE_URL / SUPABASE_ANON_KEY the platform injects. Fails closed.
+// ---------------------------------------------------------------------------
+
+// The only callers are eq-service server actions (no browser Origin); the
+// allowlist exists so a browser from any other site gets no CORS grant.
+const ALLOWED_ORIGINS = new Set(["https://service.eq.solutions", "https://core.eq.solutions"]);
+
+function corsFor(req: Request): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
+  };
+  const origin = req.headers.get("origin");
+  if (origin && ALLOWED_ORIGINS.has(origin)) headers["Access-Control-Allow-Origin"] = origin;
+  return headers;
+}
+
+async function callerIsSignedIn(req: Request): Promise<boolean> {
+  const m = /^Bearer\s+([\w-]+\.[\w-]+\.[\w-]+)$/i.exec(req.headers.get("authorization") ?? "");
+  if (!m) return false;
+  const url = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!url || !anonKey) {
+    console.error("caller check cannot run: SUPABASE_URL / SUPABASE_ANON_KEY missing");
+    return false;
+  }
+  try {
+    const res = await fetch(`${url}/rest/v1/tenant_members?select=user_id&is_active=eq.true&limit=1`, {
+      headers: { apikey: anonKey, Authorization: `Bearer ${m[1]}`, "Accept-Profile": "service" },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return false;
+    const rows = await res.json();
+    return Array.isArray(rows) && rows.length > 0;
+  } catch {
+    return false;
+  }
+}
 
 const ANTHROPIC_MODEL = "claude-sonnet-4-5";
 const ANTHROPIC_MAX_TOKENS = 8192;
@@ -194,8 +237,16 @@ async function extractCircuitsFromImage(
 // ============================================================================
 
 Deno.serve(async (req: Request) => {
+  const CORS = corsFor(req);
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS });
+  }
+
+  if (!(await callerIsSignedIn(req))) {
+    return new Response(
+      JSON.stringify({ error: "Sign in required" }),
+      { status: 401, headers: { ...CORS, "Content-Type": "application/json" } },
+    );
   }
 
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
