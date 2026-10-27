@@ -13,7 +13,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@eq-solutions/tokens": "github:eq-solutions/eq-design-tokens#v1.3.2",
+    "@eq-solutions/tokens": "github:eq-solutions/eq-design-tokens#v1.4.0",
     "@eq/schemas": "workspace:*",
     "@eq/validation": "workspace:*",
     "@eq/ai": "workspace:*",
