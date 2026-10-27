@@ -32,7 +32,6 @@ import {
 import { RowsDisclosure } from "../shared/RowsDisclosure.js";
 import { DownloadResultView, quickExportSpec } from "../shared/DownloadResultView.js";
 import { ResultPanel } from "../shared/ResultPanel.js";
-import { FreeformIntakeInput, type AiClient } from "../shared/FreeformIntakeInput.js";
 import { ReconcileModule } from "./ReconcileModule.js";
 import { QualifyModule } from "./QualifyModule.js";
 import { IntakeHealthHome } from "./IntakeHealthHome.js";
@@ -90,11 +89,6 @@ export interface IntakeModuleProps {
    */
   createdBy?: string;
   /**
-   * Optional AI client for the freeform natural language input. When absent
-   * the FreeformIntakeInput renders in preview-only mode with a notice.
-   */
-  ai?: AiClient | null;
-  /**
    * Optional callback fired when the user picks a destination. Defaults to a
    * localStorage logger keyed `eq-intake:routes`.
    */
@@ -145,9 +139,7 @@ export interface IntakeModuleProps {
   canQualifyTenders?: boolean;
   /**
    * Vision provider for the go/no-go tab's document extraction — a full
-   * @eq/ai AIProvider, deliberately a separate prop from `ai` above (that
-   * one is FreeformIntakeInput's own simpler AiClient shape, a different
-   * interface). Omit to run the qualify tab manual-answers-only (see
+   * @eq/ai AIProvider. Omit to run the qualify tab manual-answers-only (see
    * QualifyModule's own hint when absent).
    */
   qualifyAi?: import("@eq/ai").AIProvider | null;
@@ -474,8 +466,6 @@ export function IntakeModule(props: IntakeModuleProps): JSX.Element {
               />
             </div>
           )}
-
-          <FreeformIntakeInput ai={props.ai} />
 
           {bundle.slots.length > 0 && (
             <>
