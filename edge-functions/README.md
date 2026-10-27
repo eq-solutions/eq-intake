@@ -19,7 +19,23 @@ deployed `index.ts` matched `origin/main` byte for byte. The one exception is
 `verify_jwt` isn't recorded anywhere in code: there's no `config.toml`. Set it
 by hand on every deploy, using the values in the table. The two parsers need
 it **off** because ehow's Functions gateway rejects the legacy-format
-service-role JWT. The header comment in each file explains why.
+HS256 JWTs that eq-service holds. The header comment in each file explains why.
+
+### The two parsers check the caller themselves (SEC-109)
+
+With the gateway check off, each parser answers `401` unless the request
+carries a signed-in eq-service session token (`Authorization: Bearer <eq_service_jwt>`).
+The function asks ehow's own PostgREST to vouch for the token (a one-row read of
+`service.tenant_members`, run as the caller), so no new secret is needed and
+JWKS is not involved: the session token is HS256, signed with ehow's project JWT
+secret, which JWKS cannot verify. Tokens from another tenant's project fail the
+signature check. CORS allows only `https://service.eq.solutions` and
+`https://core.eq.solutions`; eq-service calls from its server, so no browser
+origin is needed in practice.
+
+**Deploy order matters:** eq-service must be sending the user's token *before*
+this version is deployed, or the Maximo import and the RCD photo read stop
+working. Tests: `deno test -A --node-modules-dir=auto edge-functions/sec109-gate.test.ts`.
 
 `api-intake` and `approve-worker-assignment` also live in this folder, but
 they aren't deployed on ehow.
