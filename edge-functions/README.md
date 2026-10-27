@@ -5,7 +5,7 @@ This repo holds the only source for four Edge Functions that run on **ehow**
 auth, storage, cron and Vault names, but **not Edge Functions**. If ehow has
 to be rebuilt in a new project, these four must be redeployed from here.
 
-Last checked against live ehow on 2026-10-16. For each function, the
+Last checked against live ehow on 2026-10-27 (the two parsers were redeployed that day with the SEC-109 caller check; the other two on 2026-10-16). For each function, the
 deployed `index.ts` matched `origin/main` byte for byte. The one exception is
 `quality-guardian`, where the deployed copy only lacks the final newline.
 
@@ -13,8 +13,8 @@ deployed `index.ts` matched `origin/main` byte for byte. The one exception is
 |---|---|---|---|---|---|
 | `eq-ai-assist` | `edge-functions/eq-ai-assist/index.ts` | **true** | v12 | `ANTHROPIC_API_KEY` | eq-shell (Intake screen), through `@eq/intake`'s `ai-client.ts` calling `supabase.functions.invoke('eq-ai-assist')` |
 | `quality-guardian` | `supabase/functions/quality-guardian/index.ts` | **true** | v11 | `SUPABASE_URL` (Supabase injects it) | pg_cron job `quality-guardian-nightly` on ehow (`sql/060_quality_guardian_cron_sks.sql`) |
-| `parse-maximo-pdf-wo` | `edge-functions/parse-maximo-pdf-wo/index.ts` | **false** | v14 | `ANTHROPIC_API_KEY` | eq-service Maximo PDF import, via Netlify env `MAXIMO_PDF_PARSE_ENDPOINT_URL` |
-| `parse-rcd-switchboard-schedule` | `edge-functions/parse-rcd-switchboard-schedule/index.ts` | **false** | v2 | `ANTHROPIC_API_KEY` | eq-service RCD "Create check" photo upload, via Netlify env `RCD_SCHEDULE_PARSE_ENDPOINT_URL` |
+| `parse-maximo-pdf-wo` | `edge-functions/parse-maximo-pdf-wo/index.ts` | **false** | v16 | `ANTHROPIC_API_KEY` | eq-service Maximo PDF import, via Netlify env `MAXIMO_PDF_PARSE_ENDPOINT_URL` |
+| `parse-rcd-switchboard-schedule` | `edge-functions/parse-rcd-switchboard-schedule/index.ts` | **false** | v4 | `ANTHROPIC_API_KEY` | eq-service RCD "Create check" photo upload, via Netlify env `RCD_SCHEDULE_PARSE_ENDPOINT_URL` |
 
 `verify_jwt` isn't recorded anywhere in code: there's no `config.toml`. Set it
 by hand on every deploy, using the values in the table. The two parsers need
