@@ -48,13 +48,13 @@ importers:
         version: 20.14.0
       tsup:
         specifier: 8.3.5
-        version: 8.3.5(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.13)(typescript@5.6.3)
+        version: 8.3.5(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.15)(typescript@5.6.3)
       typescript:
         specifier: 5.6.3
         version: 5.6.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@20.14.0)(jsdom@29.1.1)(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.13))
+        version: 4.1.11(@types/node@20.14.0)(jsdom@29.1.1)(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.15))
 
   packages/eq-confirm-ui:
     dependencies:
@@ -91,19 +91,19 @@ importers:
         version: 19.2.8(react@19.2.8)
       tsup:
         specifier: 8.3.5
-        version: 8.3.5(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.13)(typescript@5.6.3)
+        version: 8.3.5(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.15)(typescript@5.6.3)
       typescript:
         specifier: 5.6.3
         version: 5.6.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@20.14.0)(jsdom@29.1.1)(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.13))
+        version: 4.1.11(@types/node@20.14.0)(jsdom@29.1.1)(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.15))
 
   packages/eq-format-ui:
     dependencies:
       '@eq-solutions/tokens':
-        specifier: github:eq-solutions/eq-design-tokens#v1.3.2
-        version: https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/7ad0b3556344ecf5db678da0916bb049545fb259
+        specifier: github:eq-solutions/eq-design-tokens#v1.4.0
+        version: https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/1a7e049b02f233e3ed6fb9101d52569e97381cc2
       '@eq/ai':
         specifier: workspace:*
         version: link:../eq-ai
@@ -125,10 +125,10 @@ importers:
         version: 5.6.3
       vite:
         specifier: '>=6.4.3 <7.0.0'
-        version: 6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.13)
+        version: 6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.15)
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@20.14.0)(jsdom@29.1.1)(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.13))
+        version: 4.1.11(@types/node@20.14.0)(jsdom@29.1.1)(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.15))
 
   packages/eq-intake:
     dependencies:
@@ -159,22 +159,22 @@ importers:
         version: 5.3.14
       tsup:
         specifier: 8.3.5
-        version: 8.3.5(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.13)(typescript@5.6.3)
+        version: 8.3.5(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.15)(typescript@5.6.3)
       typescript:
         specifier: 5.6.3
         version: 5.6.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@20.14.0)(jsdom@29.1.1)(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.13))
+        version: 4.1.11(@types/node@20.14.0)(jsdom@29.1.1)(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.15))
 
   packages/eq-intake-demo:
     dependencies:
       '@eq-solutions/tokens':
-        specifier: github:eq-solutions/eq-design-tokens#v1.3.2
-        version: https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/7ad0b3556344ecf5db678da0916bb049545fb259
+        specifier: github:eq-solutions/eq-design-tokens#v1.4.0
+        version: https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/1a7e049b02f233e3ed6fb9101d52569e97381cc2
       '@eq-solutions/ui':
-        specifier: github:eq-solutions/eq-ui#v1.16.6
-        version: https://codeload.github.com/eq-solutions/eq-ui/tar.gz/a6f6c1c02bd4cb96776c14e67b446a81fca73e74(@eq-solutions/tokens@https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/7ad0b3556344ecf5db678da0916bb049545fb259)(lucide-react@1.16.0(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: github:eq-solutions/eq-ui#v1.19.0
+        version: https://codeload.github.com/eq-solutions/eq-ui/tar.gz/0d40a5ee37dd78b8f569ba88767221e97ee2e58a(@eq-solutions/tokens@https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/1a7e049b02f233e3ed6fb9101d52569e97381cc2)(lucide-react@1.16.0(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@eq/ai':
         specifier: workspace:*
         version: link:../eq-ai
@@ -208,7 +208,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@vitejs/plugin-react':
         specifier: 5.2.0
-        version: 5.2.0(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.13))
+        version: 5.2.0(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.15))
       react:
         specifier: ^19.2.7
         version: 19.2.8
@@ -220,10 +220,10 @@ importers:
         version: 5.6.3
       vite:
         specifier: '>=6.4.3 <7.0.0'
-        version: 6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.13)
+        version: 6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.15)
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@20.14.0)(jsdom@29.1.1)(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.13))
+        version: 4.1.11(@types/node@20.14.0)(jsdom@29.1.1)(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.15))
 
   packages/eq-schemas:
     dependencies:
@@ -244,20 +244,20 @@ importers:
         specifier: 15.0.4
         version: 15.0.4
       json-schema-to-zod:
-        specifier: 2.6.1
-        version: 2.6.1
+        specifier: 2.8.1
+        version: 2.8.1
       tsup:
         specifier: 8.3.5
-        version: 8.3.5(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.13)(typescript@5.6.3)
+        version: 8.3.5(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.15)(typescript@5.6.3)
       tsx:
-        specifier: 4.23.13
-        version: 4.23.13
+        specifier: 4.23.15
+        version: 4.23.15
       typescript:
         specifier: 5.6.3
         version: 5.6.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@20.14.0)(jsdom@29.1.1)(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.13))
+        version: 4.1.11(@types/node@20.14.0)(jsdom@29.1.1)(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.15))
 
   packages/eq-validation:
     dependencies:
@@ -273,13 +273,13 @@ importers:
         version: 20.14.0
       tsup:
         specifier: 8.3.5
-        version: 8.3.5(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.13)(typescript@5.6.3)
+        version: 8.3.5(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.15)(typescript@5.6.3)
       typescript:
         specifier: 5.6.3
         version: 5.6.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@20.14.0)(jsdom@29.1.1)(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.13))
+        version: 4.1.11(@types/node@20.14.0)(jsdom@29.1.1)(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.15))
 
 packages:
 
@@ -495,17 +495,17 @@ packages:
     resolution: {integrity: sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA==}
     engines: {node: '>=20.19.0'}
 
-  '@eq-solutions/tokens@https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/7ad0b3556344ecf5db678da0916bb049545fb259':
-    resolution: {tarball: https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/7ad0b3556344ecf5db678da0916bb049545fb259}
-    version: 1.3.2
+  '@eq-solutions/tokens@https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/1a7e049b02f233e3ed6fb9101d52569e97381cc2':
+    resolution: {tarball: https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/1a7e049b02f233e3ed6fb9101d52569e97381cc2}
+    version: 1.4.0
     engines: {node: '>=18'}
 
-  '@eq-solutions/ui@https://codeload.github.com/eq-solutions/eq-ui/tar.gz/a6f6c1c02bd4cb96776c14e67b446a81fca73e74':
-    resolution: {tarball: https://codeload.github.com/eq-solutions/eq-ui/tar.gz/a6f6c1c02bd4cb96776c14e67b446a81fca73e74}
-    version: 1.16.6
+  '@eq-solutions/ui@https://codeload.github.com/eq-solutions/eq-ui/tar.gz/0d40a5ee37dd78b8f569ba88767221e97ee2e58a':
+    resolution: {tarball: https://codeload.github.com/eq-solutions/eq-ui/tar.gz/0d40a5ee37dd78b8f569ba88767221e97ee2e58a}
+    version: 1.19.0
     engines: {node: '>=18'}
     peerDependencies:
-      '@eq-solutions/tokens': '>=1.3.1'
+      '@eq-solutions/tokens': '>=1.4.0'
       lucide-react: '>=1.16.0'
       react: '>=18'
       react-dom: '>=18'
@@ -1320,8 +1320,8 @@ packages:
     engines: {node: '>=16.0.0'}
     hasBin: true
 
-  json-schema-to-zod@2.6.1:
-    resolution: {integrity: sha512-uiHmWH21h9FjKJkRBntfVGTLpYlCZ1n98D0izIlByqQLqpmkQpNTBtfbdP04Na6+43lgsvrShFh2uWLkQDKJuQ==}
+  json-schema-to-zod@2.8.1:
+    resolution: {integrity: sha512-fRr1mHgZ7hboLKBUdR428gd9dIHUFGivUqOeiDcSmyXkNZCtB1uGaZLvsjZ4GaN5pwBIs+TGIOf6s+Rp5/R/zA==}
     hasBin: true
 
   json-schema-traverse@1.0.0:
@@ -1870,8 +1870,8 @@ packages:
     engines: {node: '>=18.0.0'}
     hasBin: true
 
-  tsx@4.23.13:
-    resolution: {integrity: sha512-BL5MGkRln6aDYhb0xbQlEAGw743BaZYWdbWtdJOBriYJboKgUUYCadFp2/FpBBZquBC/ezNBn7wMMPx7FDZUDw==}
+  tsx@4.23.15:
+    resolution: {integrity: sha512-Yiex1Ovn8z2xPpOWckIiysV1SSyRMY9BkLF++q0yKiDxCqRhosKfMg3janKkiLBwZ5c/YryloKwGZcrEmtwxKw==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
@@ -2295,11 +2295,13 @@ snapshots:
   '@csstools/css-tokenizer@4.0.0':
     optional: true
 
-  '@eq-solutions/tokens@https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/7ad0b3556344ecf5db678da0916bb049545fb259': {}
-
-  '@eq-solutions/ui@https://codeload.github.com/eq-solutions/eq-ui/tar.gz/a6f6c1c02bd4cb96776c14e67b446a81fca73e74(@eq-solutions/tokens@https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/7ad0b3556344ecf5db678da0916bb049545fb259)(lucide-react@1.16.0(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@eq-solutions/tokens@https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/1a7e049b02f233e3ed6fb9101d52569e97381cc2':
     dependencies:
-      '@eq-solutions/tokens': https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/7ad0b3556344ecf5db678da0916bb049545fb259
+      '@fontsource/plus-jakarta-sans': 5.2.8
+
+  '@eq-solutions/ui@https://codeload.github.com/eq-solutions/eq-ui/tar.gz/0d40a5ee37dd78b8f569ba88767221e97ee2e58a(@eq-solutions/tokens@https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/1a7e049b02f233e3ed6fb9101d52569e97381cc2)(lucide-react@1.16.0(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+    dependencies:
+      '@eq-solutions/tokens': https://codeload.github.com/eq-solutions/eq-design-tokens/tar.gz/1a7e049b02f233e3ed6fb9101d52569e97381cc2
       lucide-react: 1.16.0(react@19.2.8)
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
@@ -2590,7 +2592,7 @@ snapshots:
     dependencies:
       csstype: 3.2.3
 
-  '@vitejs/plugin-react@5.2.0(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.13))':
+  '@vitejs/plugin-react@5.2.0(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.15))':
     dependencies:
       '@babel/core': 7.29.7
       '@babel/plugin-transform-react-jsx-self': 7.27.1(@babel/core@7.29.7)
@@ -2598,7 +2600,7 @@ snapshots:
       '@rolldown/pluginutils': 1.0.0-rc.3
       '@types/babel__core': 7.20.5
       react-refresh: 0.18.0
-      vite: 6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.13)
+      vite: 6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.15)
     transitivePeerDependencies:
       - supports-color
 
@@ -2611,13 +2613,13 @@ snapshots:
       chai: 6.3.0
       tinyrainbow: 3.2.0
 
-  '@vitest/mocker@4.1.11(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.13))':
+  '@vitest/mocker@4.1.11(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.15))':
     dependencies:
       '@vitest/spy': 4.1.11
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.13)
+      vite: 6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.15)
 
   '@vitest/mocker@4.1.11(vite@6.4.3(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.19.2))':
     dependencies:
@@ -3108,7 +3110,7 @@ snapshots:
       prettier: 3.8.3
       tinyglobby: 0.2.16
 
-  json-schema-to-zod@2.6.1: {}
+  json-schema-to-zod@2.8.1: {}
 
   json-schema-traverse@1.0.0: {}
 
@@ -3327,13 +3329,13 @@ snapshots:
 
   pirates@4.0.7: {}
 
-  postcss-load-config@6.0.1(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.13):
+  postcss-load-config@6.0.1(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.15):
     dependencies:
       lilconfig: 3.1.3
     optionalDependencies:
       jiti: 2.7.0
       postcss: 8.5.25
-      tsx: 4.23.13
+      tsx: 4.23.15
 
   postcss@8.5.25:
     dependencies:
@@ -3595,7 +3597,7 @@ snapshots:
 
   ts-interface-checker@0.1.13: {}
 
-  tsup@8.3.5(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.13)(typescript@5.6.3):
+  tsup@8.3.5(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.15)(typescript@5.6.3):
     dependencies:
       bundle-require: 5.1.0(esbuild@0.25.12)
       cac: 6.7.14
@@ -3605,7 +3607,7 @@ snapshots:
       esbuild: 0.25.12
       joycon: 3.1.1
       picocolors: 1.1.1
-      postcss-load-config: 6.0.1(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.13)
+      postcss-load-config: 6.0.1(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.15)
       resolve-from: 5.0.0
       rollup: 4.60.2
       source-map: 0.8.0-beta.0
@@ -3629,7 +3631,7 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
-  tsx@4.23.13:
+  tsx@4.23.15:
     dependencies:
       esbuild: 0.25.12
     optionalDependencies:
@@ -3675,7 +3677,7 @@ snapshots:
 
   uuid@11.1.1: {}
 
-  vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.13):
+  vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.15):
     dependencies:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.4)
@@ -3689,7 +3691,7 @@ snapshots:
       jiti: 2.7.0
       lightningcss: 1.32.0
       terser: 5.48.0
-      tsx: 4.23.13
+      tsx: 4.23.15
 
   vite@6.4.3(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.19.2):
     dependencies:
@@ -3707,10 +3709,10 @@ snapshots:
       terser: 5.48.0
       tsx: 4.19.2
 
-  vitest@4.1.11(@types/node@20.14.0)(jsdom@29.1.1)(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.13)):
+  vitest@4.1.11(@types/node@20.14.0)(jsdom@29.1.1)(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.15)):
     dependencies:
       '@vitest/expect': 4.1.11
-      '@vitest/mocker': 4.1.11(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.13))
+      '@vitest/mocker': 4.1.11(vite@6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.15))
       '@vitest/pretty-format': 4.1.11
       '@vitest/runner': 4.1.11
       '@vitest/snapshot': 4.1.11
@@ -3727,7 +3729,7 @@ snapshots:
       tinyexec: 1.3.1
       tinyglobby: 0.2.16
       tinyrainbow: 3.2.0
-      vite: 6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.13)
+      vite: 6.4.3(@types/node@20.14.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.23.15)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 20.14.0
