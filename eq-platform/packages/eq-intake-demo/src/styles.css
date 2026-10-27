@@ -2312,8 +2312,8 @@ button.eq-primary:hover {
 }
 
 /* =========================================================================
- * New sprint classes — destination picker, mapping panel, reconcile diff,
- * freeform textarea. Desktop rules first; mobile rules follow in the
+ * New sprint classes — destination picker, mapping panel, reconcile diff.
+ * Desktop rules first; mobile rules follow in the
  * @media (max-width: 600px) block further down.
  * ========================================================================= */
 
@@ -2497,32 +2497,6 @@ button.eq-primary:hover {
   border-radius: 4px;
   margin-bottom: 12px;
   font-size: 13px;
-}
-
-/* Freeform text entry — label + textarea + button. */
-.eq-freeform {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-}
-
-.eq-freeform textarea {
-  flex: 1;
-  min-width: 220px;
-  min-height: 80px;
-  padding: 8px 10px;
-  border: 1px solid var(--eq-line);
-  border-radius: 4px;
-  font-family: inherit;
-  font-size: 13px;
-  resize: vertical;
-}
-
-.eq-freeform button {
-  flex-shrink: 0;
-  align-self: flex-end;
 }
 
 /* =========================================================================
@@ -2860,21 +2834,6 @@ button.eq-primary:hover {
     padding: 10px 12px;
   }
 
-  /* FreeformIntakeInput: textarea full width, button full width below */
-  .eq-freeform-intake .eq-freeform {
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .eq-freeform-intake__textarea {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .eq-freeform-intake .eq-intake-btn-primary {
-    width: 100%;
-  }
-
   /* ---- New sprint classes — mobile overrides ---- */
 
   /* Destination-picker row: stack vertically on narrow screens */
@@ -2977,21 +2936,6 @@ button.eq-primary:hover {
     gap: 8px;
   }
 
-  /* Freeform: textarea full width, button full width below */
-  .eq-freeform {
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .eq-freeform textarea {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .eq-freeform button {
-    width: 100%;
-    align-self: stretch;
-  }
 }
 
 /* =========================================================================
@@ -3510,90 +3454,6 @@ button.eq-primary:hover {
   font-size: 11px;
   font-weight: 700;
   vertical-align: middle;
-}
-
-/* ===== FreeformIntakeInput ===== */
-.eq-freeform-intake {
-  margin-top: 16px;
-}
-
-/* Collapsed FreeformIntakeInput — a plain-text link until clicked, so it
-   doesn't permanently take up space on the primary drop-a-file screen. */
-.eq-freeform-intake__toggle {
-  display: block;
-  border: 0;
-  background: none;
-  padding: 0;
-  margin: 4px 0 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--eq-sky);
-  text-decoration: underline;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-/* Always-visible example under the collapsed toggle — same text the
-   textarea's placeholder uses once expanded (see EXAMPLE_TEXT in
-   FreeformIntakeInput.tsx), so someone doesn't have to click through
-   just to see what kind of thing they could type. */
-.eq-freeform-intake__example {
-  font-size: 12px;
-  color: var(--eq-muted);
-  margin: 2px 0 0;
-  font-style: italic;
-}
-
-.eq-freeform-intake__textarea {
-  flex: 1;
-  min-width: 220px;
-  min-height: 80px;
-  padding: 8px 10px;
-  border: 1px solid var(--eq-line);
-  border-radius: 4px;
-  font-family: inherit;
-  font-size: 13px;
-  resize: vertical;
-  background: var(--eq-paper);
-  color: var(--eq-ink);
-}
-
-.eq-freeform-intake__textarea:focus {
-  outline: none;
-  border-color: var(--eq-sky);
-}
-
-.eq-freeform-intake__notice {
-  font-size: 12px;
-  color: var(--eq-muted);
-  margin: 6px 0 0;
-  font-style: italic;
-}
-
-.eq-freeform-intake__result {
-  margin-top: 12px;
-  padding: 12px;
-  background: var(--eq-ice);
-  border: 1px solid var(--eq-deep);
-  border-radius: 4px;
-}
-
-.eq-freeform-intake__result-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--eq-muted);
-  margin: 0 0 6px;
-}
-
-.eq-freeform-intake__result-body {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 12px;
-  color: var(--eq-ink);
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 /* ===== IntakeModule — one-screen layout ===== */
