@@ -22,6 +22,12 @@ interface Line {
 const DATE_RE = /^(\d{1,2}) ([A-Z][a-z]{2}) (\d{4})$/;
 const DAY_RE = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (\d{1,2}) ([A-Z][a-z]{2})$/;
 const HR_RE = /^(\d+(?:\.\d+)?) hr$/;
+/** Entry totals print as "8 hr", "8 hr 30 min" or "45 min". Returns hours, or null if not a duration. */
+function parseDuration(s: string): number | null {
+  const m = /^(?:(\d+(?:\.\d+)?)\s*hr)?\s*(?:(\d+)\s*min)?$/.exec(s.trim());
+  if (!m || (m[1] === undefined && m[2] === undefined)) return null;
+  return Number(m[1] ?? 0) + Number(m[2] ?? 0) / 60;
+}
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const LABEL_X_MAX = 40;
@@ -162,7 +168,16 @@ function parseDocument(doc: RawDoc): ExtractedTimesheet {
       printedTotal = Number(HR_RE.exec(first.s)![1]);
       continue;
     }
-    const labelItems = line.items.filter((i) => i.x < startX - 4);
+    let labelItems = line.items.filter((i) => i.x < startX - 4);
+    if (labelItems.length === 0 && line.items.some((i) => ["Start", "Total"].includes(columnFor(cols, i.x) ?? ""))) {
+      // Times on one line with the pay-type label a few units below (adjusted timesheets):
+      // same row, split across two y offsets, like allowances.
+      const next = lines[li + 1];
+      if (next && next.page === line.page && Math.abs(next.y - line.y) <= 10 && next.items.every((i) => i.x < startX - 4)) {
+        labelItems = next.items;
+        li++;
+      }
+    }
     if (labelItems.length === 0) {
       // Allowance-only line (own y offset): attach to the nearest entry later.
       for (const it of line.items) {
@@ -201,9 +216,9 @@ function parseDocument(doc: RawDoc): ExtractedTimesheet {
         const a = parseAllowance(it.s);
         if (a) e.allowances.push(a);
       } else if (col === "Total") {
-        const h = HR_RE.exec(it.s);
-        if (h) {
-          e.hours = Number(h[1]);
+        const h = parseDuration(it.s);
+        if (h !== null) {
+          e.hours = h;
           hoursSeen = true;
         }
       }

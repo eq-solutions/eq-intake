@@ -115,6 +115,23 @@ describe("timesheet extract", () => {
     expect(d.entries.reduce((a, e) => a + e.hours, 0)).toBe(d.printedTotal);
   });
 
+  it("reads part-hour totals printed as 'N hr M min'", async () => {
+    const pages = samplePages("1 Nov 2026", "Mon 26 Oct|Tue 27 Oct|Wed 28 Oct");
+    const cell = pages[0]!.find((c) => c[0] === "8 hr")!;
+    cell[0] = "8 hr 30 min";
+    const docs = await extractTimesheets(makePdf(pages));
+    expect(docs[0]!.entries[0]!.hours).toBe(8.5);
+  });
+
+  it("joins a pay-type label printed a few units below its times (adjusted timesheets)", async () => {
+    const pages = samplePages("1 Nov 2026", "Mon 26 Oct|Tue 27 Oct|Wed 28 Oct");
+    const label = pages[0]!.find((c) => c[0] === "Base Hourly")!;
+    label[2] = 655;
+    const docs = await extractTimesheets(makePdf(pages));
+    expect(docs[0]!.entries[0]).toMatchObject({ payType: "Base Hourly", hours: 8, start: "6:00am" });
+    expect(docs[0]!.entries.reduce((a, e) => a + e.hours, 0)).toBe(docs[0]!.printedTotal);
+  });
+
   it("resolves day dates across a month rollover", async () => {
     const docs = await extractTimesheets(makePdf(samplePages("4 Oct 2026", "Mon 28 Sep|Tue 29 Sep|Wed 30 Sep")));
     expect(docs[0]!.entries.map((e) => e.date)).toEqual(["2026-09-28", "2026-09-29", "2026-09-30"]);

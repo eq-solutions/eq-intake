@@ -56,7 +56,8 @@ const unique = docs.filter((d) => {
 });
 
 const weekFilter = process.env.WEEK_ENDING;
-const report = reconcile(weekFilter ? unique.filter((d) => d.weekEnding === weekFilter) : unique, snapshot);
+const includeStatuses = process.env.INCLUDE_STATUSES?.split(",").map((s) => s.trim());
+const report = reconcile(weekFilter ? unique.filter((d) => d.weekEnding === weekFilter) : unique, snapshot, includeStatuses ? { includeStatuses } : {});
 
 const pad = (s: string, n: number) => s.padEnd(n);
 console.log(`Documents read: ${docs.length} (${unique.length} unique person/week) from ${files.length} file(s)`);
