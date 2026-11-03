@@ -180,6 +180,8 @@ export interface ReconcileReport {
   /** PDF documents whose person was not found in the snapshot. */
   unmatchedPeople: string[];
   /** Entries whose printed hours differ from finish - start - break. Empty when the portal is self-consistent. */
+  /** Per person-day: total hours on the document vs total hours the app holds (roster/leave matches count as the document's hours). */
+  dayTotals: { person: string; date: string; pdfHours: number; appHours: number; agree: boolean }[];
   hoursArithmetic: { person: string; date: string; payType: string; printed: number; computed: number }[];
   counts: Record<Verdict, number>;
 }

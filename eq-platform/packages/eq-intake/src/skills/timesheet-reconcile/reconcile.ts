@@ -84,6 +84,7 @@ export function reconcile(
   const skipped: SkippedDocument[] = [];
   const unmatchedPeople: string[] = [];
   const hoursArithmetic: ReconcileReport["hoursArithmetic"] = [];
+  const dayTotals: ReconcileReport["dayTotals"] = [];
   const reconciled = new Set<string>(); // `${personId}|${weekEnding}`
 
   for (const doc of docs) {
@@ -126,7 +127,16 @@ export function reconcile(
       continue;
     }
     reconciled.add(`${person.id}|${doc.weekEnding}`);
-    lines.push(...reconcileDocument(doc, person, snapshot, cfg, { included, tafe, approved, pending: pendingLeave }));
+    const docLines = reconcileDocument(doc, person, snapshot, cfg, { included, tafe, approved, pending: pendingLeave });
+    lines.push(...docLines);
+    for (const date of [...new Set(doc.entries.map((e) => e.date))].sort()) {
+      const pdfHours = sum(doc.entries.filter((e) => e.date === date).map((e) => e.hours));
+      const appRows = sum(snapshot.timesheets.filter((t) => t.staffId === person.id && t.date === date).map((t) => t.hours));
+      // Roster / approved-leave matches carry no hours in the app: count the document's hours for them.
+      const implied = sum(docLines.filter((l) => l.date === date && l.verdict === "match" && l.appHours === null).map((l) => l.pdfHours ?? 0));
+      const appHours = appRows + implied;
+      dayTotals.push({ person: person.name, date, pdfHours, appHours, agree: near(pdfHours, appHours, tol) });
+    }
   }
 
   // People with app hours in a reconciled week but no document for them.
@@ -153,7 +163,7 @@ export function reconcile(
     "app-only": 0,
   };
   for (const l of lines) counts[l.verdict]++;
-  return { lines, documents, skipped, noFile, unmatchedPeople, hoursArithmetic, counts };
+  return { lines, documents, skipped, noFile, unmatchedPeople, hoursArithmetic, dayTotals, counts };
 }
 
 function reconcileDocument(
@@ -272,8 +282,20 @@ function reconcileDocument(
         const r = snap.roster.find(
           (x) => x.personId === person.id && x.date === g.date && (tafeLike(x.task) || tafeLike(x.leaveType)),
         );
-        if (r) push(ref, "roster-tafe", "TAFE", hours, null, "match", "roster shows TAFE");
-        else push(ref, "roster-tafe", "TAFE", hours, null, day.length ? "conflict" : "missing-in-app", `roster has no TAFE; app has ${dayDesc()}`);
+        // Field also records TAFE as a timesheet task ("TAFE"/"tafe") with hours.
+        const tsRows = day.filter((t) => tafeLike(t.task));
+        if (r) {
+          tsRows.forEach((t) => consumed.add(t));
+          push(ref, "roster-tafe", "TAFE", hours, tsRows.length ? sum(tsRows.map((t) => t.hours)) : null, "match", "roster shows TAFE");
+          break;
+        }
+        if (tsRows.length) {
+          tsRows.forEach((t) => consumed.add(t));
+          const app = sum(tsRows.map((t) => t.hours));
+          push(ref, "roster-tafe", "TAFE", hours, app, near(app, hours, tol) ? "match" : "hours-differ", "TAFE recorded as a timesheet task");
+          break;
+        }
+        push(ref, "roster-tafe", "TAFE", hours, null, day.length ? "conflict" : "missing-in-app", `roster has no TAFE; app has ${dayDesc()}`);
         break;
       }
 
@@ -288,7 +310,10 @@ function reconcileDocument(
             l.dateEnd >= g.date,
         );
         if (lr) {
-          push(ref, "leave", g.key, hours, null, "match", `approved leave request ${lr.dateStart}..${lr.dateEnd}`);
+          // The same leave is often also keyed as a timesheet task (e.g. "RDO"): account for it.
+          const lrTs = day.filter((t) => t.task.toLowerCase().includes(lt));
+          lrTs.forEach((t) => consumed.add(t));
+          push(ref, "leave", g.key, hours, lrTs.length ? sum(lrTs.map((t) => t.hours)) : null, "match", `approved leave request ${lr.dateStart}..${lr.dateEnd}`);
           break;
         }
         const pend = snap.leave.find(

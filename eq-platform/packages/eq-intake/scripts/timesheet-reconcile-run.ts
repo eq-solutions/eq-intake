@@ -26,12 +26,12 @@ if (!snapPath || inputs.length === 0) {
 // Snapshot is stored as compact tuples; accept either that or full objects.
 const raw = JSON.parse(fs.readFileSync(snapPath, "utf8"));
 const snapshot: FieldSnapshot = {
-  people: raw.people,
-  timesheets: raw.timesheets.map((t: any) => (Array.isArray(t) ? { staffId: t[0], date: t[1], hours: t[2], task: t[3] } : t)),
-  roster: raw.roster.map((r: any) => (Array.isArray(r) ? { personId: r[0], date: r[1], task: r[2], leaveType: r[3] } : r)),
+  people: raw.people.map((p: any) => (Array.isArray(p) ? { id: String(p[1]), name: p[2] } : p)),
+  timesheets: raw.timesheets.map((t: any) => (Array.isArray(t) ? { staffId: String(t[0]), date: t[1], hours: t[2], task: t[3] } : t)),
+  roster: raw.roster.map((r: any) => (Array.isArray(r) ? { personId: String(r[0]), date: r[1], task: r[2], leaveType: r[3] } : r)),
   leave: raw.leave.map((l: any) =>
     Array.isArray(l)
-      ? { staffId: l[0], requesterName: l[1], leaveType: l[2], dateStart: l[3], dateEnd: l[4], hoursRequested: l[5], status: l[6] }
+      ? { staffId: String(l[0]), requesterName: l[1], leaveType: l[2], dateStart: l[3], dateEnd: l[4], hoursRequested: l[5], status: l[6] }
       : l,
   ),
 };
