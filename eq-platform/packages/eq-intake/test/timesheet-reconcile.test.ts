@@ -267,6 +267,15 @@ describe("timesheet reconcile", () => {
     ]);
   });
 
+  it("flags printed hours that disagree with finish - start - break", () => {
+    const good = { ...entry("2026-10-26", "Base Hourly", 8, "10001"), start: "6:00am", finish: "2:30pm", breaksMin: 30 };
+    const bad = { ...entry("2026-10-27", "Base Hourly", 9, "10001"), start: "6:00am", finish: "2:30pm", breaksMin: 30 };
+    const r = reconcile([doc({}, [good, bad])], emptySnap());
+    expect(r.hoursArithmetic).toEqual([
+      { person: "Pat Example", date: "2026-10-27", payType: "Base Hourly", printed: 9, computed: 8 },
+    ]);
+  });
+
   it("never drops an unknown pay type", () => {
     const r = reconcile([doc({}, [entry("2026-10-26", "Mystery Pay Type", 4)])], emptySnap());
     expect(r.lines).toHaveLength(1);

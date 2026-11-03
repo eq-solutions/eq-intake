@@ -35,6 +35,13 @@ function findPerson(people: SnapshotPerson[], name: string): SnapshotPerson | nu
   return people.find((p) => normaliseName(p.name) === n) ?? null;
 }
 
+/** "7:30am" / "4:00pm" -> minutes since midnight, or null if not a clock time. */
+function clockMinutes(s: string | null): number | null {
+  const m = s ? /^(\d{1,2}):(\d{2})\s*(am|pm)$/i.exec(s.trim()) : null;
+  if (!m) return null;
+  return ((Number(m[1]) % 12) + (m[3]!.toLowerCase() === "pm" ? 12 : 0)) * 60 + Number(m[2]);
+}
+
 const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol;
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
@@ -76,6 +83,7 @@ export function reconcile(
   const documents: DocumentCheck[] = [];
   const skipped: SkippedDocument[] = [];
   const unmatchedPeople: string[] = [];
+  const hoursArithmetic: ReconcileReport["hoursArithmetic"] = [];
   const reconciled = new Set<string>(); // `${personId}|${weekEnding}`
 
   for (const doc of docs) {
@@ -101,6 +109,16 @@ export function reconcile(
       summedEntries: total,
       totalsAgree: doc.printedTotal === null ? null : near(doc.printedTotal, total, tol),
     });
+
+    for (const e of doc.entries) {
+      const s = clockMinutes(e.start);
+      const f = clockMinutes(e.finish);
+      if (s === null || f === null) continue;
+      const computed = (f - s - (e.breaksMin ?? 0)) / 60;
+      if (!near(computed, e.hours, tol)) {
+        hoursArithmetic.push({ person: doc.personName, date: e.date, payType: e.payType, printed: e.hours, computed });
+      }
+    }
 
     const person = findPerson(snapshot.people, doc.personName);
     if (!person) {
@@ -135,7 +153,7 @@ export function reconcile(
     "app-only": 0,
   };
   for (const l of lines) counts[l.verdict]++;
-  return { lines, documents, skipped, noFile, unmatchedPeople, counts };
+  return { lines, documents, skipped, noFile, unmatchedPeople, hoursArithmetic, counts };
 }
 
 function reconcileDocument(

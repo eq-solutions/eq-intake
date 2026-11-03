@@ -179,5 +179,7 @@ export interface ReconcileReport {
   noFile: { person: string; weekEnding: string; appHours: number }[];
   /** PDF documents whose person was not found in the snapshot. */
   unmatchedPeople: string[];
+  /** Entries whose printed hours differ from finish - start - break. Empty when the portal is self-consistent. */
+  hoursArithmetic: { person: string; date: string; payType: string; printed: number; computed: number }[];
   counts: Record<Verdict, number>;
 }
