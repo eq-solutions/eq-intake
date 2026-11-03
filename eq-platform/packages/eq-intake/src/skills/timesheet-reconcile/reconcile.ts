@@ -135,7 +135,7 @@ export function reconcile(
       // Roster / approved-leave matches carry no hours in the app: count the document's hours for them.
       const implied = sum(docLines.filter((l) => l.date === date && l.verdict === "match" && l.appHours === null).map((l) => l.pdfHours ?? 0));
       const appHours = appRows + implied;
-      dayTotals.push({ person: person.name, date, pdfHours, appHours, agree: near(pdfHours, appHours, tol) });
+      dayTotals.push({ person: person.name, date, pdfHours, appHours, agree: near(pdfHours, appHours, docLines.some((l) => l.date === date && l.kind === "roster-tafe") ? cfg.tafeHoursTolerance : tol) });
     }
   }
 
@@ -235,6 +235,14 @@ function reconcileDocument(
       return bits.length ? bits.join(", ") : "nothing";
     };
     const tafeLike = (t: string | null) => !!t && sets.tafe.has(t.toLowerCase());
+    const approvedCover = (date: string) =>
+      snap.leave.find(
+        (l) =>
+          (l.staffId === person.id || (l.requesterName && normaliseName(l.requesterName) === normaliseName(person.name))) &&
+          sets.approved.has(l.status.toLowerCase()) &&
+          l.dateStart <= date &&
+          l.dateEnd >= date,
+      );
 
     switch (g.res.kind) {
       case "unknown":
@@ -292,7 +300,12 @@ function reconcileDocument(
         if (tsRows.length) {
           tsRows.forEach((t) => consumed.add(t));
           const app = sum(tsRows.map((t) => t.hours));
-          push(ref, "roster-tafe", "TAFE", hours, app, near(app, hours, tol) ? "match" : "hours-differ", "TAFE recorded as a timesheet task");
+          push(ref, "roster-tafe", "TAFE", hours, app, near(app, hours, cfg.tafeHoursTolerance) ? "match" : "hours-differ", "TAFE recorded as a timesheet task");
+          break;
+        }
+        const cover = approvedCover(g.date);
+        if (cover) {
+          push(ref, "roster-tafe", "TAFE", hours, null, "conflict", `approved ${cover.leaveType} leave request ${cover.dateStart}..${cover.dateEnd} covers this day; Field's approved request wins, confirm with the approver`, true);
           break;
         }
         push(ref, "roster-tafe", "TAFE", hours, null, day.length ? "conflict" : "missing-in-app", `roster has no TAFE; app has ${dayDesc()}`);
@@ -336,7 +349,9 @@ function reconcileDocument(
           const ok = app === null || near(app, hours, tol);
           push(ref, "leave", g.key, hours, app, ok ? "match" : "hours-differ", `no approved leave request; matched on ${ts ? "timesheet" : "roster"} code`);
         } else {
-          push(ref, "leave", g.key, hours, null, day.length || snap.roster.some((x) => x.personId === person.id && x.date === g.date && x.leaveType) ? "conflict" : "missing-in-app", `no approved ${g.key} leave request; app has ${dayDesc()}`);
+          const cover = approvedCover(g.date);
+          const clash = day.length || snap.roster.some((x) => x.personId === person.id && x.date === g.date && x.leaveType) || cover;
+          push(ref, "leave", g.key, hours, null, clash ? "conflict" : "missing-in-app", cover ? `approved ${cover.leaveType} leave request ${cover.dateStart}..${cover.dateEnd} covers this day, not ${g.key}; Field's approved request wins, confirm with the approver` : `no approved ${g.key} leave request; app has ${dayDesc()}`, !!cover);
         }
         break;
       }
@@ -344,7 +359,11 @@ function reconcileDocument(
       case "code": {
         const rows = day.filter((t) => t.task.toLowerCase() === g.key!.toLowerCase());
         rows.forEach((r) => consumed.add(r));
-        if (rows.length === 0) {
+        const aliases = (cfg.rosterMatchesCode[g.key!] ?? []).map((a) => a.toLowerCase());
+        const viaRoster = snap.roster.find((x) => x.personId === person.id && x.date === g.date && x.task && aliases.includes(x.task.toLowerCase()));
+        if (rows.length === 0 && viaRoster) {
+          push(ref, "code", g.key, hours, null, "match", `matched via roster "${viaRoster.task}", no timesheet row`);
+        } else if (rows.length === 0) {
           push(ref, "code", g.key, hours, null, day.length ? "conflict" : "missing-in-app", `app has ${dayDesc()} on this day`);
         } else {
           const app = sum(rows.map((r) => r.hours));

@@ -108,6 +108,10 @@ export interface ReconcileConfig {
    * for a match, corroborated by the roster.
    */
   tafeSignatures: { start: string; finish: string; breaksMin?: number }[];
+  /** TAFE is a standard day in the app, but the portal records real sign-in/out: hours within this still match. */
+  tafeHoursTolerance: number;
+  /** Roster tasks (lower-case) that satisfy a `code` pay type when the app has no timesheet row, e.g. NECA: ["training"]. */
+  rosterMatchesCode: Record<string, string[]>;
 }
 
 export const DEFAULT_CONFIG: ReconcileConfig = {
@@ -127,6 +131,8 @@ export const DEFAULT_CONFIG: ReconcileConfig = {
   approvedLeaveStatuses: ["approved"],
   pendingLeaveStatuses: ["pending"],
   tafeSignatures: [{ start: "7:30am", finish: "4:00pm", breaksMin: 30 }],
+  tafeHoursTolerance: 1,
+  rosterMatchesCode: { NECA: ["training"] },
 };
 
 // ---- Result ---------------------------------------------------------------

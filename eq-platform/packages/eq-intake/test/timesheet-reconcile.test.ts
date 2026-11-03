@@ -293,6 +293,39 @@ describe("timesheet reconcile", () => {
     ]);
   });
 
+  it("matches TAFE keyed as a timesheet task within the TAFE tolerance, flags beyond it", () => {
+    const snap = emptySnap();
+    snap.timesheets = [
+      { staffId: "p1", date: "2026-10-26", hours: 8, task: "tafe" },
+      { staffId: "p1", date: "2026-10-27", hours: 8, task: "TAFE" },
+    ];
+    const r = reconcile(
+      [doc({}, [entry("2026-10-26", "College/TAFE/Block Release", 7.5), entry("2026-10-27", "College/TAFE/Block Release", 6)])],
+      snap,
+    );
+    expect(r.lines.map((l) => l.verdict)).toEqual(["match", "hours-differ"]);
+  });
+
+  it("lets an approved leave request win over a PDF TAFE or different leave type, and says so", () => {
+    const snap = emptySnap();
+    snap.leave = [
+      { staffId: "p1", requesterName: "Pat Example", leaveType: "unpaid", dateStart: "2026-10-26", dateEnd: "2026-10-26", hoursRequested: 8, status: "approved" },
+      { staffId: "p1", requesterName: "Pat Example", leaveType: "annual", dateStart: "2026-10-27", dateEnd: "2026-10-27", hoursRequested: 8, status: "approved" },
+    ];
+    const r = reconcile([doc({}, [entry("2026-10-26", "College/TAFE/Block Release", 8), entry("2026-10-27", "RDO", 8)])], snap);
+    expect(r.lines.map((l) => [l.verdict, l.ambiguous])).toEqual([["conflict", true], ["conflict", true]]);
+    expect(r.lines[0]!.detail).toContain("approved unpaid leave request");
+    expect(r.lines[1]!.detail).toContain("approved annual leave request");
+  });
+
+  it("matches a NECA pay type through a roster TRAINING entry when there is no timesheet row", () => {
+    const snap = emptySnap();
+    snap.roster = [{ personId: "p1", date: "2026-10-26", task: "TRAINING", leaveType: "tafe" }];
+    const r = reconcile([doc({}, [entry("2026-10-26", "NECA Office / Training Day", 8)])], snap);
+    expect(r.lines[0]).toMatchObject({ verdict: "match", kind: "code" });
+    expect(r.lines[0]!.detail).toContain("no timesheet row");
+  });
+
   it("never drops an unknown pay type", () => {
     const r = reconcile([doc({}, [entry("2026-10-26", "Mystery Pay Type", 4)])], emptySnap());
     expect(r.lines).toHaveLength(1);
