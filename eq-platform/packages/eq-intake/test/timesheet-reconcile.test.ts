@@ -199,7 +199,7 @@ describe("timesheet reconcile", () => {
     expect(r.lines.map((l) => [l.date, l.verdict])).toEqual([
       ["2026-10-27", "match"],
       ["2026-10-28", "match"],
-      ["2026-10-30", "missing-in-app"], // pending request is not authoritative
+      ["2026-10-30", "pending-leave"], // on file but not approved: raised, not matched
     ]);
   });
 
@@ -210,6 +210,61 @@ describe("timesheet reconcile", () => {
     const r = reconcile([doc({}, [entry("2026-10-30", "Annual Leave", 8)])], snap);
     expect(r.lines[0]!.verdict).toBe("conflict");
     expect(r.lines[0]!.detail).toContain("RDO");
+  });
+
+  it("infers TAFE from the time signature when the roster agrees, and flags it when it does not", () => {
+    const tafeLine = { ...entry("2026-10-27", "Base Hourly", 8), start: "7:30am", finish: "4:00pm", breaksMin: 30 };
+    const withRoster = emptySnap();
+    withRoster.roster = [{ personId: "p1", date: "2026-10-27", task: "TAFE", leaveType: "tafe" }];
+    const a = reconcile([doc({}, [tafeLine])], withRoster);
+    expect(a.lines[0]).toMatchObject({ verdict: "match", kind: "roster-tafe" });
+    const b = reconcile([doc({}, [tafeLine])], emptySnap());
+    expect(b.lines[0]).toMatchObject({ verdict: "conflict", ambiguous: true });
+    // Same times with a job note is a job, not TAFE.
+    const c = reconcile([doc({}, [{ ...tafeLine, noteText: "10001" }])], emptySnap());
+    expect(c.lines[0]!.verdict).toBe("missing-in-app");
+  });
+
+  it("flags a line with no job code for confirmation instead of guessing", () => {
+    const snap = emptySnap();
+    snap.timesheets = [{ staffId: "p1", date: "2026-10-31", hours: 6, task: "10001" }];
+    const r = reconcile([doc({}, [entry("2026-10-31", "Base Hourly", 6)])], snap);
+    expect(r.lines[0]).toMatchObject({ verdict: "conflict", ambiguous: true });
+    expect(r.lines[0]!.detail).toContain("confirm with the supervisor");
+  });
+
+  it("handles split days: same job twice, three-way, and a part that does not match", () => {
+    const snap = emptySnap();
+    snap.timesheets = [
+      { staffId: "p1", date: "2026-10-26", hours: 8, task: "10001" },
+      { staffId: "p1", date: "2026-10-27", hours: 3, task: "10001" },
+      { staffId: "p1", date: "2026-10-27", hours: 3, task: "10002" },
+      { staffId: "p1", date: "2026-10-27", hours: 2, task: "10003" },
+      { staffId: "p1", date: "2026-10-28", hours: 4, task: "10001" },
+      { staffId: "p1", date: "2026-10-28", hours: 4, task: "10009" },
+    ];
+    const r = reconcile(
+      [
+        doc({}, [
+          entry("2026-10-26", "Base Hourly", 4, "10001"), // 4 + 4 on one job vs 8 in app
+          entry("2026-10-26", "Base Hourly", 4, "10001"),
+          entry("2026-10-27", "Base Hourly", 3, "10001"),
+          entry("2026-10-27", "Base Hourly", 3, "10002"),
+          entry("2026-10-27", "Base Hourly", 2, "10003"),
+          entry("2026-10-28", "Base Hourly", 4, "10001"),
+          entry("2026-10-28", "Base Hourly", 4, "10002"), // app has 10009 instead
+        ]),
+      ],
+      snap,
+    );
+    expect(r.lines.map((l) => [l.date, l.key, l.verdict])).toEqual([
+      ["2026-10-26", "10001", "match"],
+      ["2026-10-27", "10001", "match"],
+      ["2026-10-27", "10002", "match"],
+      ["2026-10-27", "10003", "match"],
+      ["2026-10-28", "10001", "match"],
+      ["2026-10-28", "10002", "conflict"], // detail names the 10009 the app holds instead
+    ]);
   });
 
   it("never drops an unknown pay type", () => {

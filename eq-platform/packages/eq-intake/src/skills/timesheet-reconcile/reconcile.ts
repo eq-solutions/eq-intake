@@ -70,6 +70,7 @@ export function reconcile(
   const included = new Set(cfg.includeStatuses.map((s) => s.toLowerCase()));
   const tafe = new Set(cfg.tafeTaskValues.map((s) => s.toLowerCase()));
   const approved = new Set(cfg.approvedLeaveStatuses.map((s) => s.toLowerCase()));
+  const pendingLeave = new Set(cfg.pendingLeaveStatuses.map((s) => s.toLowerCase()));
 
   const lines: LineResult[] = [];
   const documents: DocumentCheck[] = [];
@@ -107,7 +108,7 @@ export function reconcile(
       continue;
     }
     reconciled.add(`${person.id}|${doc.weekEnding}`);
-    lines.push(...reconcileDocument(doc, person, snapshot, cfg, { included, tafe, approved }));
+    lines.push(...reconcileDocument(doc, person, snapshot, cfg, { included, tafe, approved, pending: pendingLeave }));
   }
 
   // People with app hours in a reconciled week but no document for them.
@@ -129,6 +130,7 @@ export function reconcile(
     "missing-in-app": 0,
     "hours-differ": 0,
     conflict: 0,
+    "pending-leave": 0,
     "unknown-pay-type": 0,
     "app-only": 0,
   };
@@ -141,7 +143,7 @@ function reconcileDocument(
   person: SnapshotPerson,
   snap: FieldSnapshot,
   cfg: ReconcileConfig,
-  sets: { included: Set<string>; tafe: Set<string>; approved: Set<string> },
+  sets: { included: Set<string>; tafe: Set<string>; approved: Set<string>; pending: Set<string> },
 ): LineResult[] {
   const tol = cfg.hoursTolerance;
   const out: LineResult[] = [];
@@ -158,7 +160,20 @@ function reconcileDocument(
     appHours: number | null,
     verdict: Verdict,
     detail: string,
-  ) => out.push({ person: person.name, date: e.date, payType: e.payType, kind, key, pdfHours, appHours, verdict, detail });
+    ambiguous = false,
+  ) =>
+    out.push({
+      person: person.name,
+      date: e.date,
+      payType: e.payType,
+      kind,
+      key,
+      pdfHours,
+      appHours,
+      verdict,
+      detail,
+      ...(ambiguous ? { ambiguous } : {}),
+    });
 
   // Group entries that land on the same comparison target (a day may split across entries).
   interface Group {
@@ -203,11 +218,25 @@ function reconcileDocument(
           const rosterTafe = snap.roster.some(
             (x) => x.personId === person.id && x.date === g.date && (tafeLike(x.task) || tafeLike(x.leaveType)),
           );
+          const looksTafe =
+            g.entries.every((e) => !e.noteText) &&
+            g.entries.every((e) =>
+              cfg.tafeSignatures.some(
+                (sig) => sig.start === e.start && sig.finish === e.finish && (sig.breaksMin === undefined || sig.breaksMin === e.breaksMin),
+              ),
+            );
           const appHrs = sum(day.map((t) => t.hours));
-          const hint = rosterTafe
-            ? `roster shows TAFE${day.length ? "" : " and the app has no hours"} (possibly TAFE keyed as a job line)`
-            : `app has ${dayDesc()}${day.length && near(appHrs, hours, tol) ? " (hours agree, job unconfirmed)" : ""}`;
-          push(ref, "job", null, hours, day.length ? appHrs : null, "conflict", `no job code in the note text, so no job comparison; ${hint}`);
+          const appH = day.length ? appHrs : null;
+          if (looksTafe && rosterTafe) {
+            push(ref, "roster-tafe", "TAFE", hours, null, "match", "inferred TAFE: no note, TAFE time signature, roster shows TAFE");
+          } else if (looksTafe) {
+            push(ref, "job", null, hours, appH, "conflict", `TAFE time signature and no note, but the roster does not show TAFE; app has ${dayDesc()}`, true);
+          } else if (rosterTafe) {
+            push(ref, "job", null, hours, appH, "conflict", `no job code in the note; roster shows TAFE${day.length ? "" : " and the app has no hours"} (possibly TAFE keyed as a job line)`, true);
+          } else {
+            const agree = day.length > 0 && near(appHrs, hours, tol);
+            push(ref, "job", null, hours, appH, "conflict", `no job code in the note, so the job cannot be confirmed; app has ${dayDesc()}${agree ? " (hours agree)" : ""} - confirm with the supervisor`, true);
+          }
           break;
         }
         const rows = day.filter((t) => t.task.toLowerCase() === g.key!.toLowerCase());
@@ -242,6 +271,18 @@ function reconcileDocument(
         );
         if (lr) {
           push(ref, "leave", g.key, hours, null, "match", `approved leave request ${lr.dateStart}..${lr.dateEnd}`);
+          break;
+        }
+        const pend = snap.leave.find(
+          (l) =>
+            (l.staffId === person.id || (l.requesterName && normaliseName(l.requesterName) === normaliseName(person.name))) &&
+            sets.pending.has(l.status.toLowerCase()) &&
+            l.leaveType.toLowerCase() === lt &&
+            l.dateStart <= g.date &&
+            l.dateEnd >= g.date,
+        );
+        if (pend) {
+          push(ref, "leave", g.key, hours, null, "pending-leave", `leave request ${pend.dateStart}..${pend.dateEnd} is still ${pend.status}; needs an approver`, true);
           break;
         }
         const ts = day.find((t) => t.task.toLowerCase().includes(lt));

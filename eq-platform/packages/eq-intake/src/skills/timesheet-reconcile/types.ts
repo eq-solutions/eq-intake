@@ -100,6 +100,14 @@ export interface ReconcileConfig {
   includeStatuses: string[];
   /** leave_requests statuses that count as authoritative. */
   approvedLeaveStatuses: string[];
+  /** leave_requests statuses on file but not yet approved: reported as `pending-leave`. */
+  pendingLeaveStatuses: string[];
+  /**
+   * Time signatures that identify a TAFE day when the pay type does not say so
+   * (e.g. TAFE keyed as "Base Hourly" with no note). Only used with no note and,
+   * for a match, corroborated by the roster.
+   */
+  tafeSignatures: { start: string; finish: string; breaksMin?: number }[];
 }
 
 export const DEFAULT_CONFIG: ReconcileConfig = {
@@ -117,6 +125,8 @@ export const DEFAULT_CONFIG: ReconcileConfig = {
   tafeTaskValues: ["tafe"],
   includeStatuses: ["pending approval", "approved", "submitted"],
   approvedLeaveStatuses: ["approved"],
+  pendingLeaveStatuses: ["pending"],
+  tafeSignatures: [{ start: "7:30am", finish: "4:00pm", breaksMin: 30 }],
 };
 
 // ---- Result ---------------------------------------------------------------
@@ -126,6 +136,7 @@ export type Verdict =
   | "missing-in-app"
   | "hours-differ"
   | "conflict"
+  | "pending-leave"
   | "unknown-pay-type"
   | "app-only";
 
@@ -140,6 +151,8 @@ export interface LineResult {
   appHours: number | null;
   verdict: Verdict;
   detail: string;
+  /** True when a rule could not decide and a human (or a later AI step) should look. */
+  ambiguous?: boolean;
 }
 
 export interface DocumentCheck {
