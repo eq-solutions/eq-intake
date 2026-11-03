@@ -189,6 +189,7 @@ function reconcileDocument(
     verdict: Verdict,
     detail: string,
     ambiguous = false,
+    extra: { flag?: "light"; info?: string } = {},
   ) =>
     out.push({
       person: person.name,
@@ -200,7 +201,10 @@ function reconcileDocument(
       appHours,
       verdict,
       detail,
+      weekEnding: doc.weekEnding,
+      docStatus: doc.status,
       ...(ambiguous ? { ambiguous } : {}),
+      ...extra,
     });
 
   // Group entries that land on the same comparison target (a day may split across entries).
@@ -263,7 +267,14 @@ function reconcileDocument(
             );
           const appHrs = sum(day.map((t) => t.hours));
           const appH = day.length ? appHrs : null;
-          if (looksTafe && rosterTafe) {
+          const nonTafeJobRows = day.filter((t) => !tafeLike(t.task));
+          if (rosterTafe && cfg.noNoteOnTafeDay === "tafe" && nonTafeJobRows.length === 0) {
+            const tsTafe = day.filter((t) => tafeLike(t.task));
+            tsTafe.forEach((t) => consumed.add(t));
+            const app = tsTafe.length ? sum(tsTafe.map((t) => t.hours)) : null;
+            const ok = app === null || near(app, hours, cfg.tafeHoursTolerance);
+            push(ref, "roster-tafe", "TAFE", hours, app, ok ? "match" : "hours-differ", "looks like a TAFE day: job line with no note on a roster TAFE day", false, { flag: "light" });
+          } else if (looksTafe && rosterTafe) {
             push(ref, "roster-tafe", "TAFE", hours, null, "match", "inferred TAFE: no note, TAFE time signature, roster shows TAFE");
           } else if (looksTafe) {
             push(ref, "job", null, hours, appH, "conflict", `TAFE time signature and no note, but the roster does not show TAFE; app has ${dayDesc()}`, true);
@@ -350,8 +361,22 @@ function reconcileDocument(
           push(ref, "leave", g.key, hours, app, ok ? "match" : "hours-differ", `no approved leave request; matched on ${ts ? "timesheet" : "roster"} code`);
         } else {
           const cover = approvedCover(g.date);
-          const clash = day.length || snap.roster.some((x) => x.personId === person.id && x.date === g.date && x.leaveType) || cover;
-          push(ref, "leave", g.key, hours, null, clash ? "conflict" : "missing-in-app", cover ? `approved ${cover.leaveType} leave request ${cover.dateStart}..${cover.dateEnd} covers this day, not ${g.key}; Field's approved request wins, confirm with the approver` : `no approved ${g.key} leave request; app has ${dayDesc()}`, !!cover);
+          const rosterLeave = snap.roster.find((x) => x.personId === person.id && x.date === g.date && x.leaveType);
+          const clash = day.length || rosterLeave || cover;
+          if (cover && cfg.approvedRequestWins) {
+            push(ref, "leave", g.key, hours, null, "conflict", `approved ${cover.leaveType} leave request ${cover.dateStart}..${cover.dateEnd} covers this day, not ${g.key}; Field's approved request wins, confirm with the approver`, true);
+          } else if (clash && cfg.leaveTypeClash === "pdf-wins") {
+            // The PDF is the claim and nothing approved contradicts it: it wins quietly, the report just notes it.
+            const leaveRows = day.filter((t) => !/^\d+$/.test(t.task));
+            leaveRows.forEach((t) => consumed.add(t));
+            const app = leaveRows.length ? sum(leaveRows.map((t) => t.hours)) : null;
+            const ok = app === null || near(app, hours, tol);
+            push(ref, "leave", g.key, hours, app, ok ? "match" : "hours-differ", `PDF leave type ${g.key} used`, false, {
+              info: `PDF says ${g.key}; Field shows ${leaveRows.length ? leaveRows.map((t) => t.task).join(", ") : `roster ${rosterLeave?.leaveType}`} and no leave request - PDF wins`,
+            });
+          } else {
+            push(ref, "leave", g.key, hours, null, clash ? "conflict" : "missing-in-app", cover ? `approved ${cover.leaveType} leave request ${cover.dateStart}..${cover.dateEnd} covers this day, not ${g.key}` : `no approved ${g.key} leave request; app has ${dayDesc()}`, !!cover);
+          }
         }
         break;
       }
@@ -388,6 +413,8 @@ function reconcileDocument(
       appHours: t.hours,
       verdict: "app-only",
       detail: "app hours the document does not account for",
+      weekEnding: doc.weekEnding,
+      docStatus: doc.status,
     });
   }
   return out;

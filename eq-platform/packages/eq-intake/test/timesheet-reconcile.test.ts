@@ -220,13 +220,43 @@ describe("timesheet reconcile", () => {
     ]);
   });
 
-  it("flags a conflict when the PDF says leave but the app holds a different code", () => {
+  it("lets the PDF leave type win quietly (info only) when Field disagrees and no approved request covers it", () => {
     const snap = emptySnap();
     snap.timesheets = [{ staffId: "p1", date: "2026-10-30", hours: 8, task: "RDO" }];
     snap.roster = [{ personId: "p1", date: "2026-10-30", task: "RDO", leaveType: "rdo" }];
     const r = reconcile([doc({}, [entry("2026-10-30", "Annual Leave", 8)])], snap);
+    expect(r.lines[0]).toMatchObject({ verdict: "match", kind: "leave", key: "annual", appHours: 8 });
+    expect(r.lines[0]!.ambiguous).toBeUndefined();
+    expect(r.lines[0]!.info).toContain("PDF wins");
+    expect(r.lines.some((l) => l.verdict === "app-only")).toBe(false);
+  });
+
+  it("flags the same leave-type clash when leaveTypeClash is set to flag", () => {
+    const snap = emptySnap();
+    snap.timesheets = [{ staffId: "p1", date: "2026-10-30", hours: 8, task: "RDO" }];
+    snap.roster = [{ personId: "p1", date: "2026-10-30", task: "RDO", leaveType: "rdo" }];
+    const r = reconcile([doc({}, [entry("2026-10-30", "Annual Leave", 8)])], snap, { leaveTypeClash: "flag" });
     expect(r.lines[0]!.verdict).toBe("conflict");
     expect(r.lines[0]!.detail).toContain("RDO");
+  });
+
+  it("counts a no-note job line on a roster TAFE day as TAFE with a light flag, not a conflict", () => {
+    const snap = emptySnap();
+    snap.roster = [{ personId: "p1", date: "2026-10-27", task: "TAFE", leaveType: "tafe" }];
+    const r = reconcile([doc({}, [entry("2026-10-27", "Base Hourly", 8)])], snap);
+    expect(r.lines[0]).toMatchObject({ verdict: "match", kind: "roster-tafe", flag: "light" });
+    expect(r.lines[0]!.detail).toContain("looks like a TAFE day");
+    expect(r.counts.conflict).toBe(0);
+    const off = reconcile([doc({}, [entry("2026-10-27", "Base Hourly", 8)])], snap, { noNoteOnTafeDay: "conflict" });
+    expect(off.lines[0]!.verdict).toBe("conflict");
+  });
+
+  it("does not hide a no-note job line on a TAFE day when the app holds real job hours that day", () => {
+    const snap = emptySnap();
+    snap.roster = [{ personId: "p1", date: "2026-10-27", task: "TAFE", leaveType: "tafe" }];
+    snap.timesheets = [{ staffId: "p1", date: "2026-10-27", hours: 8, task: "10001" }];
+    const r = reconcile([doc({}, [entry("2026-10-27", "Base Hourly", 8)])], snap);
+    expect(r.lines[0]!.verdict).toBe("conflict");
   });
 
   it("infers TAFE from the time signature when the roster agrees, and flags it when it does not", () => {

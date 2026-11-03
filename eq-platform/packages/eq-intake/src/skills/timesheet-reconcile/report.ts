@@ -50,6 +50,8 @@ export interface GroupedReport {
     noDocument: ReconcileReport["noFile"];
     skipped: ReconcileReport["skipped"];
   };
+  /** Notes that need nobody: leave type where the PDF won, and "looks like a TAFE day" lines. */
+  info: { pdfWon: LineResult[]; lookTafe: LineResult[] };
   days: ReconcileReport["dayTotals"];
   missingInApp: number;
 }
@@ -76,6 +78,10 @@ export function groupReport(report: ReconcileReport, opts: ReportOptions = {}): 
       peopleNotInField: [...report.unmatchedPeople].sort(),
       noDocument: report.noFile.filter((x) => x.weekEnding >= from).sort((a, b) => b.appHours - a.appHours),
       skipped: report.skipped.filter((s) => s.weekEnding >= from),
+    },
+    info: {
+      pdfWon: lines.filter((l) => l.info).sort(bySize),
+      lookTafe: lines.filter((l) => l.flag === "light").sort(bySize),
     },
     days: report.dayTotals
       .filter((d) => d.date >= from && !d.agree)
@@ -115,6 +121,12 @@ export function renderReportMarkdown(report: ReconcileReport, opts: ReportOption
       ? ["| Person | Week ending | Status | Reason |", "|---|---|---|---|", ...g.admin.skipped.map((s) => `| ${s.person} | ${s.weekEnding} | ${s.status} | ${s.reason.replace(/\|/g, "/")} |`), ""].join("\n")
       : "_None._\n",
   );
+
+  out.push(`## Info — nobody needs to act`, "");
+  out.push(`### Leave type where the PDF won (${g.info.pdfWon.length})`, "");
+  out.push(g.info.pdfWon.length ? g.info.pdfWon.map((l) => `- ${l.person} ${l.date}: ${l.info}`).join("\n") + "\n" : "_None._\n");
+  out.push(`### Looks like a TAFE day — no job note on a roster TAFE day (${g.info.lookTafe.length})`, "");
+  out.push(g.info.lookTafe.length ? g.info.lookTafe.map((l) => `- ${l.person} ${l.date}: counted as TAFE`).join("\n") + "\n" : "_None._\n");
 
   out.push(`## Hours summary — days where PDF and Field differ (${g.days.length})`, "");
   out.push(

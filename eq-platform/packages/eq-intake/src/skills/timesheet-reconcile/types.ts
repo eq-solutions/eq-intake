@@ -112,6 +112,19 @@ export interface ReconcileConfig {
   tafeHoursTolerance: number;
   /** Roster tasks (lower-case) that satisfy a `code` pay type when the app has no timesheet row, e.g. NECA: ["training"]. */
   rosterMatchesCode: Record<string, string[]>;
+  /**
+   * A job line with no job note on a day the roster says TAFE: "tafe" counts it as TAFE with a light
+   * `flag` ("looks like a TAFE day"); "conflict" leaves it as an ambiguous conflict.
+   */
+  noNoteOnTafeDay: "tafe" | "conflict";
+  /**
+   * PDF and Field disagree on leave type with no approved request covering the day (e.g. PDF Annual Leave,
+   * Field roster RDO): "pdf-wins" matches with an `info` line and no flag; "flag" raises a conflict.
+   * An approved request of a different type still wins and is flagged (see `approvedRequestWins`).
+   */
+  leaveTypeClash: "pdf-wins" | "flag";
+  /** An approved leave request of another type covering the day beats the PDF and is flagged for the approver. */
+  approvedRequestWins: boolean;
 }
 
 export const DEFAULT_CONFIG: ReconcileConfig = {
@@ -133,6 +146,9 @@ export const DEFAULT_CONFIG: ReconcileConfig = {
   tafeSignatures: [{ start: "7:30am", finish: "4:00pm", breaksMin: 30 }],
   tafeHoursTolerance: 1,
   rosterMatchesCode: { NECA: ["training"] },
+  noNoteOnTafeDay: "tafe",
+  leaveTypeClash: "pdf-wins",
+  approvedRequestWins: true,
 };
 
 // ---- Result ---------------------------------------------------------------
@@ -159,6 +175,13 @@ export interface LineResult {
   detail: string;
   /** True when a rule could not decide and a human (or a later AI step) should look. */
   ambiguous?: boolean;
+  /** Week-ending ISO date and portal status of the document this line came from (set for lines from a document). */
+  weekEnding?: string;
+  docStatus?: string;
+  /** Light note that never blocks and never counts as a conflict, e.g. "looks like a TAFE day". */
+  flag?: "light";
+  /** Informational line for the report only (e.g. PDF leave type won over Field's). */
+  info?: string;
 }
 
 export interface DocumentCheck {
