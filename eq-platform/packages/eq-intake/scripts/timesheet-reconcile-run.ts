@@ -70,9 +70,7 @@ console.log("\n== Skipped documents ==");
 for (const s of report.skipped) console.log(`${pad(s.person, 22)} w/e ${s.weekEnding}  ${s.reason}`);
 console.log("\n== No file (app hours, no document) ==");
 for (const n of report.noFile) console.log(`${pad(n.person, 22)} w/e ${n.weekEnding}  app ${n.appHours}h`);
-if (report.hoursArithmetic.length) console.log("
-== Hours arithmetic mismatches ==
-" + JSON.stringify(report.hoursArithmetic, null, 1));
+if (report.hoursArithmetic.length) console.log("\n== Hours arithmetic mismatches ==\n" + JSON.stringify(report.hoursArithmetic, null, 1));
 if (report.unmatchedPeople.length) console.log("\n== People not in snapshot ==\n" + report.unmatchedPeople.join("\n"));
 console.log("\n== Counts ==\n" + JSON.stringify(report.counts));
 for (const d of docs) if (d.warnings.length) console.log(`warn ${d.personName} ${d.weekEnding}: ${d.warnings.join("; ")}`);
