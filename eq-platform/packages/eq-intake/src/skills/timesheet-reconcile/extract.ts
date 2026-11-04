@@ -56,7 +56,7 @@ async function readLines(bytes: Uint8Array): Promise<Line[][]> {
     const items: Item[] = [];
     for (const raw of tc.items as Array<{ str?: string; transform?: number[] }>) {
       // Icon-font glyphs (private-use area) and zero-width/nbsp characters are not text.
-      const str = (raw.str ?? "").replace(/[-​-‍﻿ ]/g, " ").trim();
+      const str = (raw.str ?? "").replace(/[-﻿ ]|​|‌|‍/g, " ").trim();
       if (!str || !raw.transform) continue;
       items.push({ s: str, x: raw.transform[4]!, y: raw.transform[5]! });
     }
