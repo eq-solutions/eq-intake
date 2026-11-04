@@ -134,6 +134,7 @@ export const DEFAULT_CONFIG: ReconcileConfig = {
     { match: "annual leave", kind: "leave", value: "annual" },
     { match: "sick/personal|^sick", kind: "leave", value: "sick" },
     { match: "^rdo", kind: "leave", value: "rdo" },
+    { match: "without pay|unpaid", kind: "leave", value: "unpaid" },
     { match: "^neca", kind: "code", value: "NECA" },
   ],
   // First run of 4-6 digits in the note text: "27798 MP1 uplift", "Digico - 28622".
@@ -148,7 +149,7 @@ export const DEFAULT_CONFIG: ReconcileConfig = {
   rosterMatchesCode: { NECA: ["training"] },
   noNoteOnTafeDay: "tafe",
   leaveTypeClash: "pdf-wins",
-  approvedRequestWins: true,
+  approvedRequestWins: false,
 };
 
 // ---- Result ---------------------------------------------------------------

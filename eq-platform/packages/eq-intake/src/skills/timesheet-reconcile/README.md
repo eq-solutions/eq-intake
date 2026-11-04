@@ -66,12 +66,12 @@ Each group is sorted by size of difference.
 | `rosterMatchesCode` | `{ NECA: ["training"] }` | A roster entry that satisfies a code pay type with no timesheet row. |
 | `noNoteOnTafeDay` | `"tafe"` | A job line with no job note on a roster TAFE day counts as TAFE and gets a light `flag` ("looks like a TAFE day"): a `match`, never a conflict. `"conflict"` restores the old ambiguous conflict. If the app holds real job hours that day it stays a conflict either way. |
 | `leaveTypeClash` | `"pdf-wins"` | PDF and Field disagree on leave type and no approved request covers the day (e.g. PDF Annual Leave, Field roster/timesheet RDO): the line matches with an `info` note and no flag. `"flag"` raises a conflict. Roster rows are never touched or back-filled. |
-| `approvedRequestWins` | `true` | An approved leave request of a different type covering the day still beats the PDF and is flagged for the approver. Set `false` to let the PDF win there too (via `leaveTypeClash`). |
+| `approvedRequestWins` | `false` | Default `false` (owner ruling): the PDF leave type wins even when an approved request of another type covers the day, with an info line. Set `true` to have the approved request win and flag it for the approver. |
 
 ## Rulings (Royce, 2026-11-03)
 
 - TAFE matches within 1 hour. Small job-hour gaps are not tolerated and stay flagged.
-- When the PDF and Field leave types disagree and no approved request covers the day, the PDF wins with no flag, only an info line in the report (`leaveTypeClash`). An approved request of a different type still wins and is flagged (`approvedRequestWins`) - that is the earlier ruling, kept for that case; confirm if the new ruling should cover it too.
+- When the PDF and Field leave types disagree and no approved request covers the day, the PDF wins with no flag, only an info line in the report (`leaveTypeClash`). This also applies when an approved request of another type covers the day (`approvedRequestWins: false`). Leave Without Pay maps to `unpaid`. The plan script writes only Pending Approval and Approved documents by default (`--only-status` overrides).
 - A job line with no job note on a roster TAFE day counts as TAFE with a light "looks like a TAFE day" flag (`noNoteOnTafeDay`).
 - A NECA pay type matches a roster TRAINING entry when there is no timesheet row.
 - Pending leave requests raise `pending-leave`.

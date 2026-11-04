@@ -372,7 +372,7 @@ function reconcileDocument(
             const app = leaveRows.length ? sum(leaveRows.map((t) => t.hours)) : null;
             const ok = app === null || near(app, hours, tol);
             push(ref, "leave", g.key, hours, app, ok ? "match" : "hours-differ", `PDF leave type ${g.key} used`, false, {
-              info: `PDF says ${g.key}; Field shows ${leaveRows.length ? leaveRows.map((t) => t.task).join(", ") : `roster ${rosterLeave?.leaveType}`} and no leave request - PDF wins`,
+              info: `PDF says ${g.key}; Field shows ${leaveRows.length ? leaveRows.map((t) => t.task).join(", ") : `roster ${rosterLeave?.leaveType}`} ${cover ? `and an approved ${cover.leaveType} request` : "and no leave request"} - PDF wins`,
             });
           } else {
             push(ref, "leave", g.key, hours, null, clash ? "conflict" : "missing-in-app", cover ? `approved ${cover.leaveType} leave request ${cover.dateStart}..${cover.dateEnd} covers this day, not ${g.key}` : `no approved ${g.key} leave request; app has ${dayDesc()}`, !!cover);

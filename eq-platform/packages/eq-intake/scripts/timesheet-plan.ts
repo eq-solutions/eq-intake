@@ -27,7 +27,7 @@ const existing: ExistingTimesheetRow[] = JSON.parse(fs.readFileSync(opt["--exist
 
 const plan = buildWritePlan(report, people, existing, {
   intakeId: opt["--intake-id"] ?? randomUUID(),
-  ...(opt["--only-status"] ? { onlyDocStatuses: opt["--only-status"].split(",").map((s) => s.trim()) } : {}),
+  onlyDocStatuses: (opt["--only-status"] ?? "Pending Approval,Approved").split(",").map((s) => s.trim()),
 });
 fs.writeFileSync(opt["--out"], JSON.stringify(plan, null, 2));
 console.log(

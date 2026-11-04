@@ -336,13 +336,28 @@ describe("timesheet reconcile", () => {
     expect(r.lines.map((l) => l.verdict)).toEqual(["match", "hours-differ"]);
   });
 
+  it("by default the PDF leave type wins even over an approved request of another type, with an info line", () => {
+    const snap = emptySnap();
+    snap.leave = [{ staffId: "p1", requesterName: "Pat Example", leaveType: "annual", dateStart: "2026-10-27", dateEnd: "2026-10-27", hoursRequested: 8, status: "approved" }];
+    const r = reconcile([doc({}, [entry("2026-10-27", "RDO", 8)])], snap);
+    expect(r.lines[0]!.verdict).toBe("match");
+    expect(r.lines[0]!.info).toContain("PDF wins");
+  });
+
+  it("maps Leave Without Pay to unpaid leave", () => {
+    const snap = emptySnap();
+    snap.leave = [{ staffId: "p1", requesterName: "Pat Example", leaveType: "unpaid", dateStart: "2026-10-26", dateEnd: "2026-10-26", hoursRequested: 8, status: "approved" }];
+    const r = reconcile([doc({}, [entry("2026-10-26", "Leave Without Pay", 8)])], snap);
+    expect(r.lines[0]!.verdict).toBe("match");
+  });
+
   it("lets an approved leave request win over a PDF TAFE or different leave type, and says so", () => {
     const snap = emptySnap();
     snap.leave = [
       { staffId: "p1", requesterName: "Pat Example", leaveType: "unpaid", dateStart: "2026-10-26", dateEnd: "2026-10-26", hoursRequested: 8, status: "approved" },
       { staffId: "p1", requesterName: "Pat Example", leaveType: "annual", dateStart: "2026-10-27", dateEnd: "2026-10-27", hoursRequested: 8, status: "approved" },
     ];
-    const r = reconcile([doc({}, [entry("2026-10-26", "College/TAFE/Block Release", 8), entry("2026-10-27", "RDO", 8)])], snap);
+    const r = reconcile([doc({}, [entry("2026-10-26", "College/TAFE/Block Release", 8), entry("2026-10-27", "RDO", 8)])], snap, { approvedRequestWins: true });
     expect(r.lines.map((l) => [l.verdict, l.ambiguous])).toEqual([["conflict", true], ["conflict", true]]);
     expect(r.lines[0]!.detail).toContain("approved unpaid leave request");
     expect(r.lines[1]!.detail).toContain("approved annual leave request");
