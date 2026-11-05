@@ -24,6 +24,20 @@ export type {
   PreambleRow,
 } from "./readers/csv.js";
 
+export {
+  InMemoryMappingMemory,
+  lookupMapping,
+  rememberMapping,
+} from "./mapping-memory.js";
+export type {
+  ColumnMappingRecord,
+  MappingLookup,
+  MappingMemory,
+  MappingMemoryKey,
+  StoredMapping,
+  FileShape,
+} from "./mapping-memory.js";
+
 export { parseXlsx } from "./readers/xlsx.js";
 export type {
   ParsedWorkbook,

@@ -20,3 +20,16 @@ Old-behaviour proof: with the previous `csv.ts` restored, 11 of the 22 tests in
 `csv.test.ts` fail (all the new ones); with the fix, all pass.
 
 Gate: `pnpm install`, `pnpm -r build`, `pnpm lint`, `pnpm -r test` green from `eq-platform/`.
+
+## Lift 2 — Mapping memory (client side)
+
+| Capability | Before | After | Evidence |
+|---|---|---|---|
+| Re-use a confirmed mapping for a same-shaped file | `computeSignatureHash` existed but nothing looked up or stored against it outside the eq-format-ui dev server's JSON files | `MappingMemory` interface + `InMemoryMappingMemory`; `lookupMapping` / `rememberMapping` keyed by tenant + entity + signature hash | `test/mapping-memory.test.ts` |
+| Stale remembered mapping | n/a | A hit naming a column the file no longer has is a miss with `reason: "stale_columns"` and detail, never silently applied | same |
+| Tenant isolation | n/a | Key includes `tenantId`; no cross-tenant or cross-entity hits | same |
+| Durable store | none; `eq_intake_templates` absent on ehow and zaap (read-only SELECT, 2026-11-05) | Spec only: `docs/handoff-eq-intake-templates.md` for eq-shell's tenant-migrations pipe. No DDL applied, none in `sql/` | doc |
+
+Limits: in-memory only, so nothing persists until eq-shell lands the table and
+a Supabase-backed store is wired. The orchestrator does not call
+`lookupMapping` yet; this lift delivers the interface and tested logic.
