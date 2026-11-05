@@ -23,8 +23,8 @@ for (const f of readdirSync(join(ROOT, "schemas"))) {
   schemas[f.replace(".schema.json", "")] = JSON.parse(readFileSync(join(ROOT, "schemas", f), "utf8"));
 }
 
-/** Regression floor for the corpus (measured 98.3% on 2026-11-06, minus ~2 points of slack). */
-const MIN_ACCURACY = 0.96;
+/** Regression floor for the corpus (measured 100% on 2026-11-06, minus ~2 points of slack). */
+const MIN_ACCURACY = 0.98;
 /** Lower floor for the held-out set (measured 94.7%; never tuned against, see holdout.json). */
 const MIN_HOLDOUT_ACCURACY = 0.9;
 
