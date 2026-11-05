@@ -20,8 +20,14 @@
  * override via the onDestinationChange prop.
  */
 
-import { useMemo, useState, useEffect, useCallback, type JSX } from "react";
-import { type ParsedSheet, readSiteAdvisory, readContactAdvisory, type AskFilter } from "@eq/intake";
+import { useMemo, useState, useEffect, useCallback, useRef, type JSX } from "react";
+import {
+  type ParsedSheet,
+  type MappingMemory,
+  readSiteAdvisory,
+  readContactAdvisory,
+  type AskFilter,
+} from "@eq/intake";
 import { useIntakeBundle, type IntakeBundle, type FileSlot } from "../shared/intake-bundle.js";
 import { IntakeDropZone } from "../shared/IntakeDropZone.js";
 import {
@@ -44,8 +50,10 @@ import { FieldImportanceSettings } from "./FieldImportanceSettings.js";
 import { useFieldImportanceOverrides } from "../shared/use-field-importance-overrides.js";
 import { TradesSettings } from "./TradesSettings.js";
 import { useTenantTrades } from "../shared/use-tenant-trades.js";
+import { recallMapping, saveConfirmedMapping, type RecalledMapping } from "../shared/mapping-memory-flow.js";
 import {
   commitBundleToCanonical,
+  effectiveMapping,
   type SupabaseLikeClient,
   type CommitResult,
   type StageCommitFn,
@@ -130,6 +138,16 @@ export interface IntakeModuleProps {
    * and keeps the direct-RPC behaviour.
    */
   stageCommit?: StageCommitFn;
+  /**
+   * Optional store of confirmed column mappings, keyed by file shape. When
+   * supplied, a dropped file whose shape was imported before comes up with
+   * its remembered mapping pre-filled (still shown for the user to check
+   * before Save), and Save remembers the mapping it used. Best-effort only:
+   * any error from the store is treated as a miss / no-op and never blocks an
+   * import. When omitted, mapping behaves exactly as it always has. EQ Shell
+   * passes createSupabaseMappingMemory(client).
+   */
+  mappingMemory?: MappingMemory;
   /**
    * Whether the caller may use the go/no-go tender screening tab (plan
    * §C.1) — same server-gated boolean-prop pattern as canImport. UI-layer
@@ -486,6 +504,7 @@ export function IntakeModule(props: IntakeModuleProps): JSX.Element {
                     tenantId={props.tenantId}
                     createdBy={props.createdBy}
                     stageCommit={props.stageCommit}
+                    mappingMemory={props.mappingMemory}
                     onViewEntity={(entity) => {
                       setDrillEntity(entity);
                       setDrillFilters(null);
@@ -540,6 +559,7 @@ function CommitView({
   tenantId,
   createdBy,
   stageCommit,
+  mappingMemory,
   onViewEntity,
   onViewQueue,
   onReset,
@@ -549,6 +569,7 @@ function CommitView({
   tenantId: string;
   createdBy?: string;
   stageCommit?: StageCommitFn;
+  mappingMemory?: MappingMemory;
   onViewEntity: (entity: string) => void;
   onViewQueue: () => void;
   onReset: () => void;
@@ -589,6 +610,49 @@ function CommitView({
       logResolved(`map:${role}:${field}`, `Mapped "${header}" → ${field.replace(/_/g, " ")}`);
     }
   }, [logResolved]);
+
+  // Mapping memory: roles whose mapping was pre-filled from a remembered one,
+  // shown to the user to check before Save (never applied silently — any
+  // manager or supervisor can overwrite a tenant's remembered mapping).
+  // `looked` keys a lookup by role + file + headers so each shape is asked
+  // for once, not on every re-render.
+  const [recalled, setRecalled] = useState<Partial<Record<RoleName, RecalledMapping>>>({});
+  const looked = useRef(new Set<string>());
+  useEffect(() => {
+    if (!mappingMemory) return;
+    let cancelled = false;
+    for (const slot of bundle.slots) {
+      if (slot.role === "unknown" || !slot.sheet) continue;
+      const role = slot.role as RoleName;
+      const sheet = slot.sheet;
+      const key = `${role}|${slot.file.name}|${sheet.headerRow.join("")}`;
+      if (looked.current.has(key)) continue;
+      looked.current.add(key);
+      void recallMapping(mappingMemory, tenantId, role, sheet).then((found) => {
+        if (cancelled || !found) {
+          // Re-allow the lookup if this effect was torn down before it landed.
+          if (cancelled) looked.current.delete(key);
+          return;
+        }
+        // A pick the user already made wins over a late-arriving memory.
+        setManualMappings((prev) => (prev[role] ? prev : { ...prev, [role]: found.mapping }));
+        setRecalled((prev) => ({ ...prev, [role]: found }));
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [bundle.slots, mappingMemory, tenantId]);
+  const dismissRecalled = useCallback((role: RoleName) => {
+    setRecalled((prev) => {
+      const { [role]: _drop, ...rest } = prev;
+      return rest;
+    });
+    setManualMappings((prev) => {
+      const { [role]: _drop, ...rest } = prev;
+      return rest;
+    });
+  }, []);
 
   // Per-role, per-row resolution of a duplicate_existing warning — "skip"
   // (already in EQ — exclude this row from the commit) or "keep" (different
@@ -757,6 +821,19 @@ function CommitView({
       setSourceFilename(filename);
       setResult(commitResult);
       setProgressMsg(null);
+      // Saving is the user's confirmation of the mapping — remember what was
+      // used. Fire-and-forget: a refused or failed save must not touch the import.
+      if (mappingMemory) {
+        for (const [role, sheet] of Object.entries(commitBundle) as [RoleName, ParsedSheet][]) {
+          void saveConfirmedMapping(
+            mappingMemory,
+            tenantId,
+            role,
+            sheet,
+            effectiveMapping(sheet, role, manualMappings[role]),
+          );
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -785,6 +862,27 @@ function CommitView({
           {error}
         </div>
       )}
+
+      {!result &&
+        (Object.entries(recalled) as [RoleName, RecalledMapping][]).map(([role, found]) => (
+          <div key={role} className="eq-intake-info-strip" data-testid={`recalled-mapping-${role}`}>
+            We matched these columns the way you did last time ({new Date(found.savedAt).toLocaleDateString()}).
+            Check them, then save.{" "}
+            <details>
+              <summary>Show the columns</summary>
+              <ul>
+                {Object.entries(found.mapping).map(([header, field]) => (
+                  <li key={header}>
+                    {header} → {field ? field.replace(/_/g, " ") : "not used"}
+                  </li>
+                ))}
+              </ul>
+            </details>
+            <button type="button" className="eq-qa-queue__save-anyway" onClick={() => dismissRecalled(role)}>
+              Match them fresh instead
+            </button>
+          </div>
+        ))}
 
       {!result && (
         <PrecommitQuestionQueue

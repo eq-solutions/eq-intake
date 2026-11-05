@@ -13,6 +13,16 @@
 export { IntakeModule } from "./module/IntakeModule.js";
 export type { IntakeModuleProps } from "./module/IntakeModule.js";
 
+// Mapping memory — pass IntakeModuleProps.mappingMemory to remember confirmed
+// column mappings per file shape. Types re-exported so a host (EQ Shell) can
+// implement the store without importing @eq/intake directly.
+export type {
+  MappingMemory,
+  MappingMemoryKey,
+  StoredMapping,
+  ColumnMappingRecord,
+} from "@eq/intake";
+
 // Stage-aware commit plug-point — a host that has its own staging/review-
 // queue endpoint (e.g. EQ Shell's /intake-stage) supplies this via
 // IntakeModuleProps.stageCommit so the module's "Into EQ" commit routes
