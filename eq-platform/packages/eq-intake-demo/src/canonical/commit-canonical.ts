@@ -107,6 +107,12 @@ export interface EntityCommitResult {
   table: string;
   intakeId: string | null;
   committedCount: number;
+  /**
+   * Ids the direct-commit RPC returned, one slot per committed row (undefined
+   * where an id couldn't be tied to a row; empty on the staged path). Input
+   * for buildUndoPlan — recorded, never used to write.
+   */
+  committedIds?: (string | undefined)[];
   /** Rows a stageCommit call parked for human review instead of writing. 0 when no stageCommit is configured. */
   stagedCount: number;
   flaggedCount: number;
@@ -1111,6 +1117,8 @@ async function commitOneEntity(args: CommitOneEntityArgs): Promise<EntityCommitR
   // Stays undefined for a row when a chunk's returned id array didn't match
   // that chunk's length — see the length check below for why.
   const committedIds: (string | undefined)[] = new Array(toCommit.length).fill(undefined);
+  // Staged path: ids of rows that landed immediately, in arrival order (not row-aligned).
+  const stagedCommittedIds: string[] = [];
 
   const progress = args.onProgress ?? (() => undefined);
 
@@ -1136,6 +1144,7 @@ async function commitOneEntity(args: CommitOneEntityArgs): Promise<EntityCommitR
           sourceFilename: args.sourceFilename,
         });
         committedCount += staged.committed_count;
+        stagedCommittedIds.push(...(staged.committed_ids ?? []));
         stagedCount += staged.staged_count;
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -1204,6 +1213,7 @@ async function commitOneEntity(args: CommitOneEntityArgs): Promise<EntityCommitR
     intakeId,
     stagedCount,
     committedCount,
+    committedIds: useStaging ? stagedCommittedIds : committedIds,
     flaggedCount: validationResult.summary.flagged,
     rejectedCount: totalRejected,
     rejectedRows: [
