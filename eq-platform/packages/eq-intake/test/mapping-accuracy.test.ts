@@ -16,6 +16,8 @@ const loadCases = (file: string) =>
   (JSON.parse(readFileSync(join(ROOT, "test-fixtures/mapping-accuracy", file), "utf8")) as { cases: MappingCase[] }).cases;
 const corpus = loadCases("corpus.json");
 const holdout = loadCases("holdout.json");
+const holdout2 = loadCases("holdout2.json");
+const holdout3 = loadCases("holdout3.json");
 
 const schemas: Record<string, Record<string, unknown>> = {};
 for (const f of readdirSync(join(ROOT, "schemas"))) {
@@ -25,7 +27,9 @@ for (const f of readdirSync(join(ROOT, "schemas"))) {
 
 /** Regression floor for the corpus (measured 100% on 2026-11-06, minus ~2 points of slack). */
 const MIN_ACCURACY = 0.98;
-/** Lower floor for the held-out set (measured 94.7%; never tuned against, see holdout.json). */
+/** Floor for the regression sets holdout.json + holdout2.json (rules were written after seeing them; measured 100%). */
+const MIN_REGRESSION_HOLDOUT_ACCURACY = 0.95;
+/** Lower floor for holdout3.json, the only never-tuned set (measured 95.3%, scored once). */
 const MIN_HOLDOUT_ACCURACY = 0.9;
 
 describe("mapping accuracy corpus", () => {
@@ -65,13 +69,39 @@ describe("mapping accuracy corpus", () => {
     expect(score.accuracy).toBeGreaterThanOrEqual(MIN_ACCURACY);
   });
 
+  it("prints the second held-out score", () => {
+    const h = scoreMapping(holdout2, schemas, mapColumnsHeuristic);
+    const lines = [`held-out-2 TOTAL ${h.correct}/${h.totalColumns}  accuracy ${(h.accuracy * 100).toFixed(1)}%`];
+    for (const c of h.cases) {
+      for (const w of c.wrong) lines.push(`  wrong   ${c.id}: ${w.column} -> ${w.got} (expected ${w.expected})`);
+      for (const m of c.missed) lines.push(`  missed  ${c.id}: ${m}`);
+      for (const x of c.spurious) lines.push(`  spurious ${c.id}: ${x}`);
+    }
+    console.log(lines.join("\n"));
+    expect(h.totalColumns).toBeGreaterThanOrEqual(30);
+  });
+
+  it("prints the third held-out score", () => {
+    const h = scoreMapping(holdout3, schemas, mapColumnsHeuristic);
+    const lines = [`held-out-3 TOTAL ${h.correct}/${h.totalColumns}  accuracy ${(h.accuracy * 100).toFixed(1)}%`];
+    for (const c of h.cases) {
+      for (const w of c.wrong) lines.push(`  wrong   ${c.id}: ${w.column} -> ${w.got} (expected ${w.expected})`);
+      for (const m of c.missed) lines.push(`  missed  ${c.id}: ${m}`);
+      for (const x of c.spurious) lines.push(`  spurious ${c.id}: ${x}`);
+    }
+    console.log(lines.join("\n"));
+    expect(h.totalColumns).toBeGreaterThanOrEqual(30);
+  });
+
   it("stays at or above the held-out floor", () => {
-    const h = scoreMapping(holdout, schemas, mapColumnsHeuristic);
+    const reg = scoreMapping([...holdout, ...holdout2], schemas, mapColumnsHeuristic);
+    expect(reg.accuracy).toBeGreaterThanOrEqual(MIN_REGRESSION_HOLDOUT_ACCURACY);
+    const h = scoreMapping(holdout3, schemas, mapColumnsHeuristic);
     expect(h.accuracy).toBeGreaterThanOrEqual(MIN_HOLDOUT_ACCURACY);
   });
 
   it("returns one result per column, and every unmapped one says why", () => {
-    for (const c of [...corpus, ...holdout]) {
+    for (const c of [...corpus, ...holdout, ...holdout2, ...holdout3]) {
       const out = mapColumnsHeuristic(schemas[c.entity] as Record<string, unknown>, c.columns);
       expect(out.map((m) => m.column)).toEqual(c.columns);
       for (const m of out) {
@@ -89,7 +119,7 @@ describe("mapping accuracy corpus", () => {
     const none: ColumnMapper = (_s, cols) =>
       cols.map((column) => ({ column, field: null, confidence: 0, method: "none" as const }));
     expect(scoreMapping(corpus, schemas, none).accuracy).toBeLessThan(MIN_ACCURACY);
-    expect(scoreMapping(holdout, schemas, none).accuracy).toBeLessThan(MIN_HOLDOUT_ACCURACY);
+    expect(scoreMapping(holdout3, schemas, none).accuracy).toBeLessThan(MIN_HOLDOUT_ACCURACY);
   });
 
   it("refuses a corpus case with an unlabelled column", () => {

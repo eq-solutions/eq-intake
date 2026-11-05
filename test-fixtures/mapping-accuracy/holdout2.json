@@ -1,0 +1,131 @@
+{
+  "_comment": "Second held-out set, written 2026-11-06 BEFORE the follow-up mapper rules. holdout.json was seen while fixing, so it is now a regression set; this one is the never-tuned generalisation check. Generic placeholder headers only.",
+  "cases": [
+    {
+      "id": "holdout2-staff",
+      "entity": "staff",
+      "columns": [
+        "Emp. No",
+        "Surname / Last Name",
+        "Joined",
+        "Hourly Cost Rate",
+        "Charge-out Rate",
+        "Mobile Phone",
+        "Employment/Engagement",
+        "Grade",
+        "Active?",
+        "Photo",
+        "Signature"
+      ],
+      "expected": {
+        "Emp. No": "external_id",
+        "Surname / Last Name": "last_name",
+        "Joined": "start_date",
+        "Hourly Cost Rate": "hourly_rate_cost",
+        "Charge-out Rate": "hourly_rate_charge",
+        "Mobile Phone": "phone",
+        "Employment/Engagement": "employment_type",
+        "Grade": "level",
+        "Active?": "active",
+        "Photo": null,
+        "Signature": null
+      }
+    },
+    {
+      "id": "holdout2-customer",
+      "entity": "customer",
+      "columns": [
+        "Client Ref",
+        "Registered Name",
+        "A.C.N.",
+        "Phone No.",
+        "Postal Addr",
+        "Became Active",
+        "Lost Date"
+      ],
+      "expected": {
+        "Client Ref": "external_id",
+        "Registered Name": "customer_entity_legal_name",
+        "A.C.N.": "customer_entity_acn",
+        "Phone No.": "phone",
+        "Postal Addr": "address",
+        "Became Active": "became_active_at",
+        "Lost Date": "churned_at"
+      }
+    },
+    {
+      "id": "holdout2-site",
+      "entity": "site",
+      "columns": [
+        "Site Code",
+        "Addr 1",
+        "Suburb/Town",
+        "ZIP",
+        "Longitude",
+        "Contact Email"
+      ],
+      "expected": {
+        "Site Code": "external_id",
+        "Addr 1": "address_line_1",
+        "Suburb/Town": "suburb",
+        "ZIP": "postcode",
+        "Longitude": "longitude",
+        "Contact Email": "site_contact_email"
+      }
+    },
+    {
+      "id": "holdout2-defect",
+      "entity": "defect",
+      "columns": [
+        "Fault No",
+        "Reported By / Logged By",
+        "Date Closed",
+        "Remedy",
+        "Impact",
+        "Long Description"
+      ],
+      "expected": {
+        "Fault No": "external_id",
+        "Reported By / Logged By": "raised_by_user_id",
+        "Date Closed": "resolved_at",
+        "Remedy": "resolution_notes",
+        "Impact": "severity",
+        "Long Description": "description"
+      }
+    },
+    {
+      "id": "holdout2-maintenance",
+      "entity": "maintenance_check",
+      "columns": [
+        "Target Date",
+        "Scheduled Start",
+        "Actual Start",
+        "Interval",
+        "Job Plan Code"
+      ],
+      "expected": {
+        "Target Date": "due_date",
+        "Scheduled Start": "start_date",
+        "Actual Start": "started_at",
+        "Interval": "frequency",
+        "Job Plan Code": "plan_id"
+      }
+    },
+    {
+      "id": "holdout2-pm-calendar",
+      "entity": "pm_calendar",
+      "columns": [
+        "FY Quarter",
+        "Fiscal Year",
+        "Planned Hours",
+        "Venue"
+      ],
+      "expected": {
+        "FY Quarter": "quarter",
+        "Fiscal Year": "financial_year",
+        "Planned Hours": "hours",
+        "Venue": "location"
+      }
+    }
+  ]
+}

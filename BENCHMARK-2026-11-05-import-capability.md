@@ -43,7 +43,7 @@ a Supabase-backed store is wired. The orchestrator does not call
 
 Baseline (deterministic heuristic mapper, no AI): **50/58 correct, accuracy 86.2%, precision 92.2%, recall 87.0%.**
 
-After the 2026-11-06 mapper pass (abbreviation expansion, reference-noun and token-subset rules): corpus **58/58, 100%** (after relabelling `Account No` to `external_id`, Royce 2026-11-06, per the schema alias); separate never-tuned held-out set (`holdout.json`, 57 columns) **94.7%** (54/57, baseline 91.2%). Floors: 98% corpus, 90% held-out.
+After the 2026-11-06 mapper pass (abbreviation expansion, reference-noun and token-subset rules): corpus **58/58, 100%** (after relabelling `Account No` to `external_id`, Royce 2026-11-06, per the schema alias); separate never-tuned held-out set (`holdout.json`, 57 columns) **94.7%** (54/57, baseline 91.2%). Follow-up pass (PR 2): added rules for dotted initialisms, "A / B" headers, "Date X" ordering, and aliases inside longer headers. Fresh held-out set before the rules: 82.1% (32/39); after, on a third never-seen set scored once: **95.3% (41/43)**. Sets 1 and 2 read 100% but were seen while writing rules, so they are regression checks only. Floors: 98% corpus, 90% held-out.
 Misses are visible in the runner output, e.g. `Emp #`, `Mob`, `Rate`, `WO #` unmapped; `Customer` mapped to `customer_id` instead of `company_name`.
 Regression floor in the test is 80%; raise it when the mapper improves. Any `ColumnMapper` (including an AI one, via a mock in tests) can be scored on the same corpus.
 
