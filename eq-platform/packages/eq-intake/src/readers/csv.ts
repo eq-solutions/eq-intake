@@ -136,6 +136,28 @@ interface Decoded {
   encodingFallback: boolean;
 }
 
+// Code points for bytes 0x80-0x9F in Windows-1252. Decoded by hand because
+// some runtimes (Node built without full ICU) map "windows-1252" to Latin-1,
+// turning smart quotes and dashes into C1 control characters.
+const CP1252_HIGH =
+  "€‚ƒ„…†‡ˆ‰Š‹ŒŽ" +
+  "‘’“”•–—˜™š›œžŸ";
+
+function decodeWindows1252(bytes: Uint8Array): string {
+  const parts: string[] = [];
+  const CHUNK = 8192;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    const end = Math.min(i + CHUNK, bytes.length);
+    const codes = new Array<number>(end - i);
+    for (let j = i; j < end; j++) {
+      const b = bytes[j] as number;
+      codes[j - i] = b >= 0x80 && b <= 0x9f ? (CP1252_HIGH.charCodeAt(b - 0x80)) : b;
+    }
+    parts.push(String.fromCharCode(...codes));
+  }
+  return parts.join("");
+}
+
 function decodeBytes(bytes: Uint8Array, requested: string | undefined): Decoded {
   if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
     const enc = requested ?? "utf-8";
@@ -181,7 +203,7 @@ function decodeBytes(bytes: Uint8Array, requested: string | undefined): Decoded 
     };
   } catch {
     return {
-      text: new TextDecoder("windows-1252").decode(bytes),
+      text: decodeWindows1252(bytes),
       encoding: "windows-1252",
       bomDetected: false,
       encodingFallback: true,
