@@ -396,6 +396,19 @@ export interface UnmappedRequiredField {
 }
 
 /**
+ * The header → field mapping a commit will actually use for one entity:
+ * inferMapping()'s result with any manual picks layered on top. Exposed so
+ * mapping memory can store exactly what the user confirmed.
+ */
+export function effectiveMapping(
+  sheet: ParsedSheet,
+  entity: CanonicalEntity,
+  manualMapping?: Record<string, string | null>,
+): Record<string, string | null> {
+  return { ...inferMapping(sheet.headerRow, CANONICAL_SCHEMAS[entity]), ...(manualMapping ?? {}) };
+}
+
+/**
  * Pre-commit scan for required fields that inferMapping() (plus any manual
  * override) still couldn't fill from any column — e.g. a "Clients" header
  * that scores well enough in classify.ts's fuzzy matcher to win the entity
