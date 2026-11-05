@@ -16,7 +16,7 @@ asked to fix. It must NOT:
 - **Write to `app_data._eq_migrations`** — the eq-shell migration runner is
   the SINGLE ledger writer. As of 2026-07-03 the eq-shell drift gate
   hard-fails on any NULL-checksum ledger row dated after 2026-07-03, so a
-  hand-inserted row (like `057_remediation_queue`, 2026-07-02) now turns the
+  hand-inserted row (like `057_remediation_queue`, 2026-07-02, since reconciled away) now turns the
   gate red within 3 hours and blocks all eq-shell merges.
 
 **Why:** the 2026-07-02 steward run 001 created `app_data.eq_remediation_queue`
@@ -49,9 +49,11 @@ repos will fight over its shape on every dispatch.
 
 ## Rule 3 — Migration numbering
 
-eq-intake `sql/` numbers (3-digit: `053_…`, `057_…`) are allocated from the
-live ehow ledger. Do not delete or renumber rows in the live ledger to "clean
+eq-intake `sql/` numbers (3-digit: `053_…`, `057_…`) are staging numbers, not live
+ledger names. Do not delete or renumber rows in the live ledger to "clean
 up" — eq-shell's `--reconcile-ledger` coordinates that, and dropping a row
-that eq-intake's numbering assumes consumed causes collisions. Current state:
-`057_remediation_queue` stays in the ledger (grandfathered) until a
-coordinated reconcile.
+that a numbering assumes consumed causes collisions. Current state (checked on
+ehow 2026-11-05): the `057_remediation_queue` row is no longer in the ledger; the
+reconcile happened and the table is recorded by eq-shell migration
+`0156_adopt_eq_remediation_queue.sql`. Live ledger names are eq-shell's 4-digit
+style, so agree the number with eq-shell before handing a change to it.
