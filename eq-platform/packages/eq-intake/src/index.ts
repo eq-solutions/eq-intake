@@ -15,12 +15,13 @@
  * Orchestrator: parseFile() → classify → map (or signature-cache hit) → validate.
  */
 
-export { parseCsv } from "./readers/csv.js";
+export { parseCsv, CsvLimitError } from "./readers/csv.js";
 export type {
   ParsedSheet,
   ParseCsvOptions,
   ParseMeta,
   CsvRow,
+  PreambleRow,
 } from "./readers/csv.js";
 
 export { parseXlsx } from "./readers/xlsx.js";

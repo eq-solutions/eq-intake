@@ -16,7 +16,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { parseCsv } from "../src/readers/csv.js";
+import { parseCsv, CsvLimitError } from "../src/readers/csv.js";
 import { validate } from "@eq/validation";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -156,6 +156,96 @@ describe("parseCsv — malformed handling (added 2026-05-19 after overnight revi
     expect(parsed.meta.malformed).toHaveLength(0);
     expect(parsed.meta.malformedRows).toBe(0);
     expect(parsed.rows).toHaveLength(2);
+  });
+});
+
+describe("parseCsv — header-row detection (title rows)", () => {
+  it("skips title + blank rows and reads the real header", async () => {
+    const raw = readFileSync(join(FIXTURE_DIR, "staff-title-rows.csv"));
+    const parsed = await parseCsv(raw);
+    expect(parsed.headerRow).toEqual(["first_name", "last_name", "email", "trade"]);
+    expect(parsed.rows).toHaveLength(3);
+    expect(parsed.rows[0]).toMatchObject({ first_name: "Anna", trade: "electrician" });
+    expect(parsed.meta.headerRowIndex).toBe(3);
+  });
+
+  it("returns the rows above the header verbatim in meta.preamble (no silent drop)", async () => {
+    const raw = readFileSync(join(FIXTURE_DIR, "staff-title-rows.csv"));
+    const parsed = await parseCsv(raw);
+    expect(parsed.meta.preamble).toEqual([
+      { lineNumber: 1, raw: "Staff export,,," },
+      { lineNumber: 2, raw: "Generated for review,,," },
+    ]);
+  });
+
+  it("reports absolute source line numbers for malformed rows below a title block", async () => {
+    const input = "Report,,\n\na,b,c\n1,2,3\n4,5\n";
+    const parsed = await parseCsv(input);
+    expect(parsed.headerRow).toEqual(["a", "b", "c"]);
+    expect(parsed.meta.malformed[0]?.lineNumber).toBe(5);
+    expect(parsed.meta.malformed[0]?.raw).toBe("4,5");
+  });
+
+  it("leaves a clean file's header at record 0 with an empty preamble", async () => {
+    const parsed = await parseCsv("a,b\n1,2\n");
+    expect(parsed.meta.headerRowIndex).toBe(0);
+    expect(parsed.meta.preamble).toEqual([]);
+  });
+
+  it("honours an explicit headerRowIndex", async () => {
+    const parsed = await parseCsv("x,y\na,b\n1,2\n", { headerRowIndex: 1 });
+    expect(parsed.headerRow).toEqual(["a", "b"]);
+    expect(parsed.meta.preamble).toEqual([{ lineNumber: 1, raw: "x,y" }]);
+  });
+});
+
+describe("parseCsv — encoding detection", () => {
+  it("decodes a Windows-1252 file with accented names and reports the fallback", async () => {
+    const raw = readFileSync(join(FIXTURE_DIR, "staff-cp1252.csv"));
+    const parsed = await parseCsv(raw);
+    expect(parsed.meta.encoding).toBe("windows-1252");
+    expect(parsed.meta.encodingFallback).toBe(true);
+    expect(parsed.rows.map((r) => r.first_name)).toEqual(["José", "Renée", "Zoë"]);
+    expect(parsed.rows.map((r) => r.last_name)).toEqual(["Müller", "O’Brien", "Nuñez"]);
+  });
+
+  it("keeps valid UTF-8 as utf-8 with no fallback flag", async () => {
+    const parsed = await parseCsv(Buffer.from("name\nJosé\n", "utf-8"));
+    expect(parsed.meta.encoding).toBe("utf-8");
+    expect(parsed.meta.encodingFallback).toBe(false);
+    expect(parsed.rows[0]).toEqual({ name: "José" });
+  });
+
+  it("decodes UTF-16LE with BOM", async () => {
+    const body = Buffer.from("a,b\nÅsa,2\n", "utf16le");
+    const parsed = await parseCsv(Buffer.concat([Buffer.from([0xff, 0xfe]), body]));
+    expect(parsed.meta.encoding).toBe("utf-16le");
+    expect(parsed.rows[0]).toEqual({ a: "Åsa", b: "2" });
+  });
+
+  it("uses an explicitly requested encoding without fallback", async () => {
+    const raw = readFileSync(join(FIXTURE_DIR, "staff-cp1252.csv"));
+    const parsed = await parseCsv(raw, { encoding: "windows-1252" });
+    expect(parsed.meta.encodingFallback).toBe(false);
+    expect(parsed.rows[0]?.first_name).toBe("José");
+  });
+});
+
+describe("parseCsv — size caps", () => {
+  it("rejects input over maxBytes with a visible error, not a truncation", async () => {
+    await expect(parseCsv("a,b\n1,2\n", { maxBytes: 4 })).rejects.toBeInstanceOf(CsvLimitError);
+  });
+
+  it("rejects input over maxLines", async () => {
+    const big = `a,b\n${"1,2\n".repeat(50)}`;
+    const err = await parseCsv(big, { maxLines: 10 }).catch((e) => e);
+    expect(err).toBeInstanceOf(CsvLimitError);
+    expect(err.limit).toBe("maxLines");
+  });
+
+  it("parses a file just under the caps", async () => {
+    const parsed = await parseCsv(`a,b\n${"1,2\n".repeat(5000)}`, { maxLines: 6000 });
+    expect(parsed.rows).toHaveLength(5000);
   });
 });
 
