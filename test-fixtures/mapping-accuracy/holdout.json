@@ -1,0 +1,167 @@
+{
+  "_comment": "Held-out set: differently worded headers (abbreviations, punctuation, casing, spacing) for fields the main corpus also covers. Written BEFORE the mapper was changed; never tune the mapper against these cases. Generic placeholder headers only \u2014 no client data.",
+  "cases": [
+    {
+      "id": "holdout-staff-hr-extract",
+      "entity": "staff",
+      "columns": [
+        "Employee No.",
+        "Given Name",
+        "Family Name",
+        "E-mail",
+        "Cell No",
+        "Engagement Type",
+        "Commencement Date",
+        "Termination Date",
+        "Pay Rate ($/hr)",
+        "Sell Rate",
+        "Depot",
+        "Remarks",
+        "Is Active?",
+        "Full Name"
+      ],
+      "expected": {
+        "Employee No.": "external_id",
+        "Given Name": "first_name",
+        "Family Name": "last_name",
+        "E-mail": "email",
+        "Cell No": "phone",
+        "Engagement Type": "employment_type",
+        "Commencement Date": "start_date",
+        "Termination Date": "end_date",
+        "Pay Rate ($/hr)": "hourly_rate_cost",
+        "Sell Rate": "hourly_rate_charge",
+        "Depot": "home_base",
+        "Remarks": "notes",
+        "Is Active?": "active",
+        "Full Name": null
+      }
+    },
+    {
+      "id": "holdout-staff-variant-forms",
+      "entity": "staff",
+      "columns": [
+        "FIRST  NAME",
+        "Last-Name",
+        "EMAIL ADDRESS",
+        "Mobile #",
+        "Trade/Discipline"
+      ],
+      "expected": {
+        "FIRST  NAME": "first_name",
+        "Last-Name": "last_name",
+        "EMAIL ADDRESS": "email",
+        "Mobile #": "phone",
+        "Trade/Discipline": "trade"
+      }
+    },
+    {
+      "id": "holdout-customer-crm-dump",
+      "entity": "customer",
+      "columns": [
+        "Client Name",
+        "A.B.N.",
+        "ACN",
+        "Client No",
+        "Tel",
+        "Head Office Address",
+        "Billing Email",
+        "Lead Date",
+        "Churn Date",
+        "Customer Type",
+        "Logo",
+        "Comments"
+      ],
+      "expected": {
+        "Client Name": "company_name",
+        "A.B.N.": "customer_entity_abn",
+        "ACN": "customer_entity_acn",
+        "Client No": "external_id",
+        "Tel": "phone",
+        "Head Office Address": "address",
+        "Billing Email": "email",
+        "Lead Date": "first_engaged_at",
+        "Churn Date": "churned_at",
+        "Customer Type": "type",
+        "Logo": "logo_url",
+        "Comments": "notes"
+      }
+    },
+    {
+      "id": "holdout-site-list",
+      "entity": "site",
+      "columns": [
+        "Site Name",
+        "Site No",
+        "Street",
+        "City",
+        "Post Code",
+        "State/Territory",
+        "Lat",
+        "Lng",
+        "Site Contact",
+        "Induction Req'd"
+      ],
+      "expected": {
+        "Site Name": "name",
+        "Site No": "external_id",
+        "Street": "address_line_1",
+        "City": "suburb",
+        "Post Code": "postcode",
+        "State/Territory": "state",
+        "Lat": "latitude",
+        "Lng": "longitude",
+        "Site Contact": "site_contact_name",
+        "Induction Req'd": "induction_required"
+      }
+    },
+    {
+      "id": "holdout-defect-log",
+      "entity": "defect",
+      "columns": [
+        "Defect No",
+        "Summary",
+        "Reported By",
+        "Assignee",
+        "Priority",
+        "Fix Description",
+        "WO No.",
+        "Closed At"
+      ],
+      "expected": {
+        "Defect No": "external_id",
+        "Summary": "title",
+        "Reported By": "raised_by_user_id",
+        "Assignee": "assigned_to_user_id",
+        "Priority": "severity",
+        "Fix Description": "resolution_notes",
+        "WO No.": "work_order_number",
+        "Closed At": "resolved_at"
+      }
+    },
+    {
+      "id": "holdout-maintenance-schedule",
+      "entity": "maintenance_check",
+      "columns": [
+        "Work Order",
+        "PM No",
+        "Freq",
+        "Scheduled Date",
+        "Technician",
+        "Dark Site",
+        "Actual Finish",
+        "Row Colour"
+      ],
+      "expected": {
+        "Work Order": "maximo_wo_number",
+        "PM No": "maximo_pm_number",
+        "Freq": "frequency",
+        "Scheduled Date": "due_date",
+        "Technician": "assigned_to_user_id",
+        "Dark Site": "is_dark_site",
+        "Actual Finish": "completed_at",
+        "Row Colour": null
+      }
+    }
+  ]
+}

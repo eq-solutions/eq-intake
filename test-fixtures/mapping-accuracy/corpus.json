@@ -8,7 +8,7 @@
       "expected": {
         "Customer": "company_name",
         "Type": "type",
-        "Account No": "code",
+        "Account No": "external_id",
         "ABN": "customer_entity_abn",
         "Email": "email",
         "Phone": "phone",
