@@ -24,6 +24,33 @@ export type {
   PreambleRow,
 } from "./readers/csv.js";
 
+export {
+  InMemoryMappingMemory,
+  lookupMapping,
+  rememberMapping,
+} from "./mapping-memory.js";
+export type {
+  ColumnMappingRecord,
+  MappingLookup,
+  MappingMemory,
+  MappingMemoryKey,
+  StoredMapping,
+  FileShape,
+} from "./mapping-memory.js";
+
+export { buildUndoPlan, UNDO_CAVEATS } from "./import-undo.js";
+export type {
+  ImportBatchRecord,
+  UndoPlan,
+  UndoStep,
+  UnrecoverableBatch,
+} from "./import-undo.js";
+
+export { mapColumnsHeuristic } from "./map-columns-heuristic.js";
+export type { ColumnMapper, ColumnMatch } from "./map-columns-heuristic.js";
+export { scoreMapping } from "./mapping-accuracy.js";
+export type { MappingCase, CaseScore, CorpusScore } from "./mapping-accuracy.js";
+
 export { parseXlsx } from "./readers/xlsx.js";
 export type {
   ParsedWorkbook,

@@ -1,0 +1,112 @@
+{
+  "_comment": "Hand-labelled header -> canonical field cases. Headers only, no data, no client names. null = should stay unmapped. Labels were written from the schemas, not from any mapper's output. Add cases; do not edit a label to make a score go up.",
+  "cases": [
+    {
+      "id": "customer-account-export",
+      "entity": "customer",
+      "columns": ["Customer", "Type", "Account No", "ABN", "Email", "Phone", "Address", "First Engaged", "Notes"],
+      "expected": {
+        "Customer": "company_name",
+        "Type": "type",
+        "Account No": "code",
+        "ABN": "customer_entity_abn",
+        "Email": "email",
+        "Phone": "phone",
+        "Address": "address",
+        "First Engaged": "first_engaged_at",
+        "Notes": "notes"
+      }
+    },
+    {
+      "id": "contact-list",
+      "entity": "contact",
+      "columns": ["Customer", "Site", "Contact Name", "Job Title", "Email", "Mobile", "Primary"],
+      "expected": {
+        "Customer": "company_name",
+        "Site": null,
+        "Contact Name": null,
+        "Job Title": "position",
+        "Email": "email",
+        "Mobile": "mobile_phone",
+        "Primary": null
+      }
+    },
+    {
+      "id": "defect-register",
+      "entity": "defect",
+      "columns": ["Site", "Asset", "Title", "Description", "Severity", "Status", "Raised By", "WO #", "Resolved Date"],
+      "expected": {
+        "Site": "site_id",
+        "Asset": "asset_id",
+        "Title": "title",
+        "Description": "description",
+        "Severity": "severity",
+        "Status": "status",
+        "Raised By": "raised_by_user_id",
+        "WO #": "work_order_number",
+        "Resolved Date": "resolved_at"
+      }
+    },
+    {
+      "id": "maintenance-check-workorders",
+      "entity": "maintenance_check",
+      "columns": ["WO Number", "Site", "Job Plan", "Frequency", "Due Date", "Status", "Tech", "WO Notes"],
+      "expected": {
+        "WO Number": "maximo_wo_number",
+        "Site": "site_id",
+        "Job Plan": "plan_id",
+        "Frequency": "frequency",
+        "Due Date": "due_date",
+        "Status": "status",
+        "Tech": "assigned_to_user_id",
+        "WO Notes": "notes"
+      }
+    },
+    {
+      "id": "pm-calendar-schedule",
+      "entity": "pm_calendar",
+      "columns": ["Site", "Title", "Start", "End", "Quarter", "FY", "Hours", "$ Cost", "Tech", "Status"],
+      "expected": {
+        "Site": "site_id",
+        "Title": "title",
+        "Start": "start_time",
+        "End": "end_time",
+        "Quarter": "quarter",
+        "FY": "financial_year",
+        "Hours": "hours",
+        "$ Cost": "contractor_materials_cost",
+        "Tech": "assigned_to_user_id",
+        "Status": "status"
+      }
+    },
+    {
+      "id": "staff-payroll-export",
+      "entity": "staff",
+      "columns": ["Emp #", "Name", "Mob", "Type", "Started", "Rate", "Trade"],
+      "expected": {
+        "Emp #": "external_id",
+        "Name": null,
+        "Mob": "phone",
+        "Type": "employment_type",
+        "Started": "start_date",
+        "Rate": "hourly_rate_cost",
+        "Trade": "trade"
+      }
+    },
+    {
+      "id": "staff-clean-headers",
+      "entity": "staff",
+      "columns": ["first_name", "last_name", "email", "phone", "employment_type", "trade", "start_date", "active"],
+      "expected": {
+        "first_name": "first_name",
+        "last_name": "last_name",
+        "email": "email",
+        "phone": "phone",
+        "employment_type": "employment_type",
+        "trade": "trade",
+        "start_date": "start_date",
+        "active": "active"
+      }
+    }
+  ]
+}
