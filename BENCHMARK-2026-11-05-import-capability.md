@@ -42,6 +42,8 @@ a Supabase-backed store is wired. The orchestrator does not call
 | Mapping accuracy measurement | No scored corpus | 7 hand-labelled header cases over 6 entities (58 columns, headers only, no data, no client names) in `test-fixtures/mapping-accuracy/corpus.json`; `scoreMapping` + vitest runner prints per-case and total score | `test/mapping-accuracy.test.ts` |
 
 Baseline (deterministic heuristic mapper, no AI): **50/58 correct, accuracy 86.2%, precision 92.2%, recall 87.0%.**
+
+After the 2026-11-06 mapper pass (abbreviation expansion, reference-noun and token-subset rules): corpus **57/58, 98.3%**; separate never-tuned held-out set (`holdout.json`, 57 columns) **94.7%** (54/57, baseline 91.2%). Floors: 96% corpus, 90% held-out.
 Misses are visible in the runner output, e.g. `Emp #`, `Mob`, `Rate`, `WO #` unmapped; `Customer` mapped to `customer_id` instead of `company_name`.
 Regression floor in the test is 80%; raise it when the mapper improves. Any `ColumnMapper` (including an AI one, via a mock in tests) can be scored on the same corpus.
 
