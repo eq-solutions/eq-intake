@@ -17,7 +17,7 @@
     "@eq/schemas": "workspace:*",
     "@eq/validation": "workspace:*",
     "@eq/ai": "workspace:*",
-    "@fontsource/plus-jakarta-sans": "^5.2.8"
+    "@fontsource/plus-jakarta-sans": "^5.3.0"
   },
   "devDependencies": {
     "@types/node": "20.14.0",

@@ -29,7 +29,7 @@
     "@eq/intake": "workspace:*",
     "@eq/schemas": "workspace:*",
     "@eq/validation": "workspace:*",
-    "@fontsource/plus-jakarta-sans": "^5.2.8",
+    "@fontsource/plus-jakarta-sans": "^5.3.0",
     "zustand": "5.0.15"
   },
   "peerDependencies": {
@@ -38,10 +38,10 @@
   },
   "devDependencies": {
     "@types/node": "20.14.0",
-    "@types/react": "19.2.14",
+    "@types/react": "19.3.0",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "5.2.0",
-    "react": "^19.2.7",
+    "react": "^19.3.1",
     "react-dom": "^19.2.7",
     "typescript": "5.6.3",
     "vite": "6.4.3",
