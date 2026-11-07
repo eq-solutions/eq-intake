@@ -6,7 +6,8 @@
  *      tried with common abbreviations expanded ("Emp #" -> employee_number)
  *   2. reference noun: a bare "Customer" names the party, not its `customer_id`
  *   3. token subset: the header's words all appear in exactly one field name
- *   4. fuzzy match (Jaro-Winkler) against the same names, with the same length
+ *   4. alias inside header: "Mobile Phone" contains the alias "mobile"
+ *   5. fuzzy match (Jaro-Winkler) against the same names, with the same length
  *      guard classify.ts uses
  * Two columns that land on the same field: the stronger match keeps it, the
  * other is returned unmapped with a reason (never both, never dropped). Every
@@ -24,7 +25,7 @@ export interface ColumnMatch {
   field: string | null;
   /** 0-1. */
   confidence: number;
-  method: "exact" | "reference" | "token" | "fuzzy" | "none" | "duplicate_target" | "ambiguous";
+  method: "exact" | "reference" | "token" | "contains" | "fuzzy" | "none" | "duplicate_target" | "ambiguous";
   /** Why the column is unmapped. Always set when `field` is null. */
   reason?: string;
 }
@@ -42,6 +43,7 @@ const SYSTEM_FIELDS = new Set(["tenant_id", "imported_at", "imported_from"]);
 function norm(s: string): string {
   return s
     .toLowerCase()
+    .replace(/(?<![a-z0-9])(?:[a-z]\.){2,}/g, (m) => m.replace(/\./g, ""))
     .replace(/#/g, " number ")
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
@@ -56,13 +58,23 @@ const ABBREVIATIONS: Record<string, string> = {
   emp: "employee",
   mob: "mobile",
   wo: "work_order",
+  commencement: "start",
+  commenced: "start",
 };
+
+/** Words too generic to identify a field when found inside a longer header. */
+const GENERIC_WORDS = new Set(["id", "name", "type", "code", "date", "no", "number", "the", "of"]);
 
 function expand(n: string): string {
   return n
     .split("_")
     .map((w) => ABBREVIATIONS[w] ?? w)
     .join("_");
+}
+
+/** "date_closed" -> ["closed_at", "closed_date"]: a leading "date" is a trailing "_at"/"_date" in field names. */
+function dateForms(e: string): string[] {
+  return e.startsWith("date_") ? [`${e.slice(5)}_at`, `${e.slice(5)}_date`] : [];
 }
 
 /** Of several fields a bare word could mean, the internal-cost side wins ("Rate" in a payroll file). */
@@ -92,22 +104,23 @@ export const mapColumnsHeuristic: ColumnMapper = (schema, columns) => {
     reason,
   });
 
-  const matches: ColumnMatch[] = columns.map((column) => {
-    const c = norm(column);
+  type Hit = Omit<ColumnMatch, "column">;
+  const resolve = (text: string): Hit => {
+    const c = norm(text);
     const e = expand(c);
-    if (SYSTEM_FIELDS.has(c)) return unmapped(column, "system column; an import never fills it");
+    if (SYSTEM_FIELDS.has(c)) return { field: null, confidence: 0, method: "none", reason: "system column; an import never fills it" };
 
     // "#" reads as "number", so "Mobile #" also tries "mobile".
     const bare = e.replace(/_number$/, "");
-    const exact =
-      names.find((n) => n.name === c) ?? names.find((n) => n.name === e) ?? names.find((n) => n.name === bare);
-    if (exact) return { column, field: exact.field, confidence: 1, method: "exact" };
+    const forms = [c, e, bare, ...dateForms(e)];
+    const exact = forms.map((f) => names.find((n) => n.name === f)).find(Boolean);
+    if (exact) return { field: exact.field, confidence: 1, method: "exact" };
 
     // A bare noun that is the stem of an `<noun>_id` field names the thing, not its key.
     if (!c.includes("_") && fieldSet.has(`${c}_id`)) {
       const nameField = [`${c}_name`, "company_name", "client_name", "name"].find((f) => fieldSet.has(f));
-      if (nameField) return { column, field: nameField, confidence: 0.9, method: "reference" };
-      return unmapped(column, `'${column}' names an entity, not its ${c}_id key; no name field to map it to`);
+      if (nameField) return { field: nameField, confidence: 0.9, method: "reference" };
+      return { field: null, confidence: 0, method: "none", reason: `'${text}' names an entity, not its ${c}_id key; no name field to map it to` };
     }
 
     // All the header's words appear in exactly one field name.
@@ -120,9 +133,18 @@ export const mapColumnsHeuristic: ColumnMapper = (schema, columns) => {
       : [];
     if (hits.length) {
       const pick = preferCost(hits);
-      if (pick.length === 1) return { column, field: pick[0] as string, confidence: 0.8, method: "token" };
-      return unmapped(column, `ambiguous: could be ${hits.join(", ")}`, "ambiguous");
+      if (pick.length === 1) return { field: pick[0] as string, confidence: 0.8, method: "token" };
+      return { field: null, confidence: 0, method: "ambiguous", reason: `ambiguous: could be ${hits.join(", ")}` };
     }
+
+    // A whole alias sits inside the header ("Mobile Phone" holds "mobile"); all such aliases must agree.
+    const contained = new Set<string>();
+    for (const n of names) {
+      const aw = n.name.split("_").filter(Boolean);
+      if (!aw.length || aw.every((w) => GENERIC_WORDS.has(w))) continue;
+      if (aw.every((w) => words.includes(w))) contained.add(n.field);
+    }
+    if (contained.size === 1) return { field: [...contained][0] as string, confidence: 0.75, method: "contains" };
 
     let best: { field: string; score: number } | null = null;
     for (const n of names) {
@@ -134,8 +156,18 @@ export const mapColumnsHeuristic: ColumnMapper = (schema, columns) => {
       }
     }
     return best
-      ? { column, field: best.field, confidence: best.score, method: "fuzzy" as const }
-      : unmapped(column, "no field name or alias matched, exactly or closely");
+      ? { field: best.field, confidence: best.score, method: "fuzzy" }
+      : { field: null, confidence: 0, method: "none", reason: "no field name or alias matched, exactly or closely" };
+  };
+
+  const matches: ColumnMatch[] = columns.map((column) => {
+    // "Surname / Last Name": either side may name the field.
+    const parts = column.split("/").map((p) => p.trim()).filter(Boolean);
+    if (parts.length > 1) {
+      const hit = parts.map(resolve).filter((h) => h.field !== null).sort((a, b) => b.confidence - a.confidence)[0];
+      if (hit) return { column, ...hit };
+    }
+    return { column, ...resolve(column) };
   });
 
   // One column per field: strongest wins.

@@ -1,0 +1,139 @@
+{
+  "_comment": "Third held-out set, written AFTER the follow-up mapper rules were final and scored exactly once. holdout.json and holdout2.json were seen while writing rules, so they are regression sets; this is the only unseen generalisation check. Generic placeholder headers only.",
+  "cases": [
+    {
+      "id": "holdout3-staff",
+      "entity": "staff",
+      "columns": [
+        "Forename",
+        "Employee Number",
+        "Cell / Mobile",
+        "Pay Rate",
+        "Date Hired",
+        "Date Left",
+        "Home Depot",
+        "Preferred Name",
+        "Is Enabled",
+        "Staff Comments",
+        "Shirt Size"
+      ],
+      "expected": {
+        "Forename": "first_name",
+        "Employee Number": "external_id",
+        "Cell / Mobile": "phone",
+        "Pay Rate": "hourly_rate_cost",
+        "Date Hired": "start_date",
+        "Date Left": "end_date",
+        "Home Depot": "home_base",
+        "Preferred Name": "preferred_name",
+        "Is Enabled": "active",
+        "Staff Comments": "notes",
+        "Shirt Size": null
+      }
+    },
+    {
+      "id": "holdout3-customer",
+      "entity": "customer",
+      "columns": [
+        "Trading Name",
+        "Customer Number",
+        "Customer Telephone",
+        "Head Office Address",
+        "Date Lost",
+        "Lead Date",
+        "A.B.N",
+        "Brand Logo"
+      ],
+      "expected": {
+        "Trading Name": "display_name",
+        "Customer Number": "external_id",
+        "Customer Telephone": "phone",
+        "Head Office Address": "address",
+        "Date Lost": "churned_at",
+        "Lead Date": "first_engaged_at",
+        "A.B.N": "customer_entity_abn",
+        "Brand Logo": "logo_url"
+      }
+    },
+    {
+      "id": "holdout3-site",
+      "entity": "site",
+      "columns": [
+        "Site Ref",
+        "Street Address",
+        "City / Locality",
+        "Post Code",
+        "Lat",
+        "Site Phone",
+        "Needs Induction"
+      ],
+      "expected": {
+        "Site Ref": "external_id",
+        "Street Address": "address_line_1",
+        "City / Locality": "suburb",
+        "Post Code": "postcode",
+        "Lat": "latitude",
+        "Site Phone": "site_contact_phone",
+        "Needs Induction": "induction_required"
+      }
+    },
+    {
+      "id": "holdout3-defect",
+      "entity": "defect",
+      "columns": [
+        "Defect Ref",
+        "Subject",
+        "Logged By",
+        "Owner",
+        "Date Fixed",
+        "Fixed By",
+        "WO Date"
+      ],
+      "expected": {
+        "Defect Ref": "external_id",
+        "Subject": "title",
+        "Logged By": "raised_by_user_id",
+        "Owner": "assigned_to_user_id",
+        "Date Fixed": "resolved_at",
+        "Fixed By": "resolved_by_user_id",
+        "WO Date": "work_order_date"
+      }
+    },
+    {
+      "id": "holdout3-maintenance",
+      "entity": "maintenance_check",
+      "columns": [
+        "Technician",
+        "Planned Start",
+        "Completed",
+        "Freq.",
+        "PM #",
+        "WO #"
+      ],
+      "expected": {
+        "Technician": "assigned_to_user_id",
+        "Planned Start": "start_date",
+        "Completed": "completed_at",
+        "Freq.": "frequency",
+        "PM #": "maximo_pm_number",
+        "WO #": "maximo_wo_number"
+      }
+    },
+    {
+      "id": "holdout3-pm-calendar",
+      "entity": "pm_calendar",
+      "columns": [
+        "Fiscal Quarter",
+        "Labour Hours",
+        "Event Title",
+        "Begin"
+      ],
+      "expected": {
+        "Fiscal Quarter": "quarter",
+        "Labour Hours": "hours",
+        "Event Title": "title",
+        "Begin": "start_time"
+      }
+    }
+  ]
+}
