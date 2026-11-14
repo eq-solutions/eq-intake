@@ -19,6 +19,7 @@ import {
   STAFF_SCHEMA,
 } from "../simpro-schemas.js";
 import type { RoleName } from "../rollup/roles.js";
+import { isLikelyIgnoredSheet, splitFullNameColumn } from "./sheet-hints.js";
 
 /** The four roles a SimPRO-shaped sheet gets classified into. */
 export const ROLE_REGISTRY: Record<RoleName, Record<string, unknown>> = {
@@ -39,6 +40,14 @@ export interface FileSlot {
   scores?: Record<string, number>;
   /** How classifySheet reached `role` — "heuristic" is decisive, the others need a human glance. */
   method?: "heuristic" | "ai" | "ambiguous_fallback";
+  /**
+   * Set when the tab name says "not this one" (old, ignore, archive...). The
+   * slot stays visible but its role is "unknown", so it can never win a role
+   * slot in slotForRole / availableRoles until the person picks "Use it anyway".
+   */
+  skipReason?: string;
+  /** What classifySheet said for a skipped tab, kept so "Use it anyway" needs no re-read. */
+  held?: { role: RoleName | "unknown"; confidence: number; scores: Record<string, number>; method: "heuristic" | "ai" | "ambiguous_fallback" };
 }
 
 /** Plain-English plural for a role, for UI copy. */
@@ -79,6 +88,8 @@ export interface IntakeBundle {
   slotForRole: (role: RoleName) => FileSlot | undefined;
   /** Override a slot's classified role — the "Change" / close-call / unsure picks. */
   setSlotRole: (idx: number, role: RoleName) => void;
+  /** Bring a skipped tab back in, using what classification already said about it. */
+  unskipSlot: (idx: number) => void;
 }
 
 export function useIntakeBundle(): IntakeBundle {
@@ -99,18 +110,36 @@ export function useIntakeBundle(): IntakeBundle {
           }
           // One slot per sheet, so multi-tab workbooks classify each tab.
           for (const sheet of parsed.sheets) {
+            // A lone "Full Name" column is split into First/Last BEFORE
+            // classifying, so the name columns count toward the staff or
+            // contacts score. The split copy is only kept when the sheet
+            // really is staff or contacts.
+            const probe = splitFullNameColumn(sheet, "staff");
             const classification = await classifySheet({
               schemas: ROLE_REGISTRY,
-              sheet,
+              sheet: probe,
             });
-            next.push({
+            const role = toRole(classification.entity);
+            const keptSheet = role === "staff" || role === "contact" ? probe : sheet;
+            const slot: FileSlot = {
               file,
-              role: toRole(classification.entity),
-              sheet,
+              role,
+              sheet: keptSheet,
               confidence: classification.confidence,
               scores: classification.scores,
               method: classification.method,
-            });
+            };
+            if (isLikelyIgnoredSheet(sheet.sheetName)) {
+              slot.held = {
+                role,
+                confidence: classification.confidence,
+                scores: classification.scores,
+                method: classification.method,
+              };
+              slot.role = "unknown";
+              slot.skipReason = `Skipped: the tab is called "${sheet.sheetName}", which sounds like old or unused data.`;
+            }
+            next.push(slot);
           }
         } catch (e) {
           next.push({
@@ -132,7 +161,32 @@ export function useIntakeBundle(): IntakeBundle {
 
   const setSlotRole = useCallback((idx: number, role: RoleName) => {
     setSlots((prev) =>
-      prev.map((s, i) => (i === idx ? { ...s, role, method: "heuristic" as const } : s)),
+      prev.map((s, i) =>
+        i === idx
+          ? {
+              ...s,
+              role,
+              method: "heuristic" as const,
+              sheet: s.sheet ? splitFullNameColumn(s.sheet, role) : s.sheet,
+            }
+          : s,
+      ),
+    );
+  }, []);
+
+  const unskipSlot = useCallback((idx: number) => {
+    setSlots((prev) =>
+      prev.map((s, i) => {
+        if (i !== idx || !s.held) return s;
+        const { held, skipReason: _skipReason, ...rest } = s;
+        return {
+          ...rest,
+          role: held.role,
+          confidence: held.confidence,
+          scores: held.scores,
+          method: held.method,
+        };
+      }),
     );
   }, []);
 
@@ -150,5 +204,5 @@ export function useIntakeBundle(): IntakeBundle {
     [slots],
   );
 
-  return { slots, busy, ingestFiles, removeSlot, reset, availableRoles, slotForRole, setSlotRole };
+  return { slots, busy, ingestFiles, removeSlot, reset, availableRoles, slotForRole, setSlotRole, unskipSlot };
 }

@@ -340,12 +340,12 @@ export const STAFF_SCHEMA = {
     email: {
       type: ["string", "null"],
       format: "email",
-      "x-eq-source-aliases": ["email", "work_email", "staff_email"],
+      "x-eq-source-aliases": ["email", "work_email", "staff_email", "email_addr", "email_address", "e_mail"],
     },
     mobile_phone: {
       type: ["string", "null"],
       "x-eq-coerce": "phone-au",
-      "x-eq-source-aliases": ["mobile_phone", "mobile", "cell", "phone"],
+      "x-eq-source-aliases": ["mobile_phone", "mobile", "cell", "phone", "mob", "mobile_number", "mobile_no", "cell_phone"],
     },
     work_phone: {
       type: ["string", "null"],
@@ -365,7 +365,7 @@ export const STAFF_SCHEMA = {
     employment_type: {
       type: ["string", "null"],
       description: "Employee, Contractor, Labour Hire, etc.",
-      "x-eq-source-aliases": ["employment_type", "type", "worker_type", "engagement_type"],
+      "x-eq-source-aliases": ["employment_type", "type", "worker_type", "engagement_type", "emp_type", "employment", "employment_status", "emp_status"],
     },
     company: {
       type: ["string", "null"],
