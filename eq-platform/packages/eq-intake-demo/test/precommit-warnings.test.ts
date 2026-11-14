@@ -8,6 +8,8 @@
 import { describe, it, expect } from "vitest";
 import {
   collectPreCommitWarnings,
+  collectPreCommitNotes,
+  describeNote,
   describeWarning,
   warningsFingerprint,
   filterResolvedWarnings,
@@ -377,5 +379,64 @@ describe("filterResolvedWarnings", () => {
       },
     ];
     expect(filterResolvedWarnings(others, {}, {})).toEqual(others);
+  });
+});
+
+describe("pre-commit notes (bad emails, blank rows)", () => {
+  const staffSheet = (rows: Record<string, unknown>[], emptyRowsSkipped = 0): ParsedSheet => ({
+    sheetName: "Staff",
+    headerRow: ["First Name", "Last Name", "Email"],
+    rows,
+    meta: {
+      encoding: "binary",
+      delimiter: "xlsx",
+      totalRows: rows.length,
+      emptyRowsSkipped,
+      malformedRows: 0,
+      malformed: [],
+      bomDetected: false,
+    },
+  });
+  const staffSlot = (sheet: ParsedSheet) => slot({ role: "staff", method: "heuristic", sheet });
+
+  it("flags a look-alike ＠ and a no-TLD email, with plain-English copy", () => {
+    const sheet = staffSheet([
+      { "First Name": "Ana", "Last Name": "Lee", Email: "ana@example.com" },
+      { "First Name": "Hana", "Last Name": "K", Email: "hana.k＠example" },
+      { "First Name": "Bo", "Last Name": "R", Email: "bo@example" },
+    ]);
+    const notes = collectPreCommitNotes([staffSlot(sheet)]);
+    expect(notes).toHaveLength(1);
+    const n = notes[0]!;
+    expect(n.kind).toBe("bad_emails");
+    if (n.kind !== "bad_emails") return;
+    expect(n.rows.map((r) => r.rowIndex)).toEqual([1, 2]);
+    const text = describeNote(n);
+    expect(text).toContain("row 2");
+    expect(text).toContain("hana.k＠example");
+    expect(text).toContain("won't be saved");
+    expect(text).not.toMatch(/coerce|schema|validation/i);
+  });
+
+  it("is quiet for good, blank or unmapped emails", () => {
+    const sheet = staffSheet([
+      { "First Name": "Ana", "Last Name": "Lee", Email: "ana@example.com" },
+      { "First Name": "Bo", "Last Name": "R", Email: "" },
+    ]);
+    expect(collectPreCommitNotes([staffSlot(sheet)])).toEqual([]);
+  });
+
+  it("surfaces skipped blank rows as a note", () => {
+    const sheet = staffSheet([{ "First Name": "Ana", "Last Name": "Lee", Email: "ana@example.com" }], 2);
+    const notes = collectPreCommitNotes([staffSlot(sheet)]);
+    expect(notes).toEqual([{ kind: "blank_rows", slotLabel: "test.csv", count: 2 }]);
+    expect(describeNote(notes[0]!)).toBe('"test.csv" — 2 blank rows left out. Nothing to do.');
+  });
+
+  it("notes never appear in the blocking warnings", () => {
+    const sheet = staffSheet([{ "First Name": "Hana", "Last Name": "K", Email: "x＠y" }], 1);
+    const kinds = collectPreCommitWarnings([staffSlot(sheet)]).map((w) => w.kind as string);
+    expect(kinds).not.toContain("bad_emails");
+    expect(kinds).not.toContain("blank_rows");
   });
 });

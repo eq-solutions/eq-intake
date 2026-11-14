@@ -60,6 +60,7 @@ import {
 } from "../canonical/commit-canonical.js";
 import {
   collectPreCommitWarnings,
+  collectPreCommitNotes,
   warningsFingerprint,
   filterResolvedWarnings,
   duplicateRowsKey,
@@ -741,6 +742,12 @@ function CommitView({
     () => allWarnings.filter((w) => w.kind !== "low_confidence"),
     [allWarnings],
   );
+  // Heads-up notes (bad emails, blank rows) — shown in the queue but kept out
+  // of allWarnings, so they never gate Save.
+  const preCommitNotes = useMemo(
+    () => collectPreCommitNotes(bundle.slots, manualMappings),
+    [bundle.slots, manualMappings],
+  );
   const warningsKey = useMemo(() => warningsFingerprint(allWarnings), [allWarnings]);
   const [acknowledgedKey, setAcknowledgedKey] = useState<string | null>(null);
   const warningsAcknowledged = allWarnings.length === 0 || acknowledgedKey === warningsKey;
@@ -887,6 +894,7 @@ function CommitView({
       {!result && (
         <PrecommitQuestionQueue
           warnings={queueWarnings}
+          notes={preCommitNotes}
           resolvedLog={resolvedLog}
           manualMappings={manualMappings}
           onPickColumn={setManualPick}

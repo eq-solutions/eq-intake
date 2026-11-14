@@ -16,6 +16,8 @@
 import { type JSX } from "react";
 import {
   describeWarning,
+  describeNote,
+  type PreCommitNote,
   type PreCommitWarning,
   type DuplicateRowsResolution,
   type MultiValueResolution,
@@ -30,6 +32,8 @@ export interface ResolvedLogEntry {
 export interface PrecommitQuestionQueueProps {
   /** Outstanding questions, in order — the first is the one presented. */
   warnings: PreCommitWarning[];
+  /** Heads-up notes — shown, never block Save. */
+  notes?: PreCommitNote[];
   /** Already-answered questions, oldest first — the trail above the current one. */
   resolvedLog: ResolvedLogEntry[];
   manualMappings: Partial<Record<RoleName, Record<string, string | null>>>;
@@ -41,6 +45,7 @@ export interface PrecommitQuestionQueueProps {
 
 export function PrecommitQuestionQueue({
   warnings,
+  notes = [],
   resolvedLog,
   manualMappings,
   onPickColumn,
@@ -48,7 +53,7 @@ export function PrecommitQuestionQueue({
   onResolveDuplicateRows,
   onResolveMultiValue,
 }: PrecommitQuestionQueueProps): JSX.Element | null {
-  if (warnings.length === 0 && resolvedLog.length === 0) return null;
+  if (warnings.length === 0 && resolvedLog.length === 0 && notes.length === 0) return null;
 
   const current = warnings[0];
 
@@ -60,6 +65,16 @@ export function PrecommitQuestionQueue({
             <li key={entry.key} className="eq-qa-queue__trail-item">
               <span className="eq-qa-queue__trail-check">✓</span>
               <span>{entry.summary}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {notes.length > 0 && (
+        <ul className="eq-qa-queue__notes" aria-label="Heads up">
+          {notes.map((n, i) => (
+            <li key={`${n.kind}:${n.slotLabel}:${i}`} className="eq-qa-queue__note">
+              {describeNote(n)}
             </li>
           ))}
         </ul>
