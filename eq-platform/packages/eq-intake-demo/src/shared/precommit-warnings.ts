@@ -20,6 +20,7 @@ import {
   previewMultiValueCandidates,
   previewUnmappedRequiredFields,
   previewDuplicateRows,
+  previewBadEmails,
 } from "../canonical/commit-canonical.js";
 import type { RoleName } from "../rollup/roles.js";
 
@@ -226,4 +227,56 @@ export function warningsFingerprint(warnings: PreCommitWarning[]): string {
       return `multi_value:${w.slotLabel}:${w.field}:${w.affectedRowCount}`;
     })
     .join("|");
+}
+
+/**
+ * Heads-up notes — things worth a glance before saving that are NOT
+ * questions: they have no answer to give and never hold Save back (records
+ * keepers, not gatekeepers). Kept apart from PreCommitWarning on purpose, so
+ * they stay out of the acknowledgment gate and the one-at-a-time queue.
+ *   - bad_emails: email cells that won't pass the save's own check. The save
+ *     rejects the WHOLE row for one of these (it does not blank the email), so
+ *     the note says the row won't be saved until the email is fixed.
+ *   - blank_rows: completely empty rows the reader skipped.
+ */
+export type PreCommitNote =
+  | {
+      kind: "bad_emails";
+      slotLabel: string;
+      role: RoleName;
+      /** 0-based indices into the sheet's data rows (blank rows already skipped). */
+      rows: { rowIndex: number; value: string }[];
+    }
+  | { kind: "blank_rows"; slotLabel: string; count: number };
+
+export function collectPreCommitNotes(
+  slots: FileSlot[],
+  manualMappings?: Partial<Record<RoleName, Record<string, string | null>>>,
+): PreCommitNote[] {
+  const notes: PreCommitNote[] = [];
+  for (const slot of slots) {
+    if (slot.role === "unknown" || !slot.sheet) continue;
+    const bad = previewBadEmails(slot.sheet, slot.role, manualMappings?.[slot.role]);
+    if (bad.length > 0) {
+      notes.push({ kind: "bad_emails", slotLabel: slot.file.name, role: slot.role, rows: bad });
+    }
+    const blanks = slot.sheet.meta?.emptyRowsSkipped ?? 0;
+    if (blanks > 0) {
+      notes.push({ kind: "blank_rows", slotLabel: slot.file.name, count: blanks });
+    }
+  }
+  return notes;
+}
+
+export function describeNote(n: PreCommitNote): string {
+  if (n.kind === "blank_rows") {
+    return `"${n.slotLabel}" — ${n.count} blank row${n.count === 1 ? "" : "s"} left out. Nothing to do.`;
+  }
+  const shown = n.rows
+    .slice(0, 3)
+    .map((r) => `row ${r.rowIndex + 1} ("${r.value}")`)
+    .join(", ");
+  const more = n.rows.length > 3 ? ` and ${n.rows.length - 3} more` : "";
+  const many = n.rows.length === 1;
+  return `"${n.slotLabel}" — ${many ? "this email doesn't look right" : "these emails don't look right"}: ${shown}${more}. ${many ? "That row" : "Those rows"} won't be saved until ${many ? "it's" : "they're"} fixed.`;
 }

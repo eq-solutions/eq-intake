@@ -4847,6 +4847,21 @@ button.eq-primary:hover {
   align-items: baseline;
 }
 
+.eq-qa-queue__notes {
+  list-style: none;
+  margin: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--eq-line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.eq-qa-queue__note {
+  font-size: 13px;
+  color: var(--eq-ink);
+}
+
 .eq-qa-queue__trail-check {
   color: var(--eq-ok);
   font-weight: 700;

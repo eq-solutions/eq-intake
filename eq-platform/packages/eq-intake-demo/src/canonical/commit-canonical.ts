@@ -40,7 +40,7 @@
  * still-live eq_read_customers_by_intake / eq_read_staff_by_intake FK reads.
  */
 
-import { validate } from "@eq/validation";
+import { validate, coerceEmail } from "@eq/validation";
 import type { ParsedSheet } from "@eq/intake";
 import {
   dice,
@@ -471,6 +471,47 @@ export interface DuplicateRowCandidate {
   values: [string, string];
   /** Dice similarity between the two normalised values (1 = identical). */
   similarity: number;
+}
+
+export interface BadEmailCandidate {
+  /** 0-based index into sheet.rows. */
+  rowIndex: number;
+  /** The email cell exactly as it appears in the sheet. */
+  value: string;
+}
+
+/**
+ * Pre-commit scan for email cells that won't pass validation (no "@", no dot
+ * in the domain, a look-alike "＠", etc). Uses the same coerceEmail() the
+ * commit's validate() runs, so what's flagged here is exactly what the save
+ * would reject — at save time a bad email rejects its WHOLE row (coerce_failed),
+ * it is not blanked. Read-only: changes nothing about what gets saved.
+ */
+export function previewBadEmails(
+  sheet: ParsedSheet,
+  entity: CanonicalEntity,
+  manualMapping?: Record<string, string | null>,
+  schemas?: Partial<Record<CanonicalEntity, JsonSchema>>,
+): BadEmailCandidate[] {
+  const schema = schemas?.[entity] ?? CANONICAL_SCHEMAS[entity];
+  const mapping = { ...inferMapping(sheet.headerRow, schema), ...(manualMapping ?? {}) };
+  const emailHeaders = Object.entries(mapping)
+    .filter(([, field]) => field != null && schema.properties[field]?.["format"] === "email")
+    .map(([header]) => header);
+  if (emailHeaders.length === 0) return [];
+
+  const out: BadEmailCandidate[] = [];
+  (sheet.rows as Record<string, unknown>[]).forEach((row, rowIndex) => {
+    for (const h of emailHeaders) {
+      const raw = row[h];
+      if (raw == null || String(raw).trim() === "") continue;
+      if (!coerceEmail(raw).ok) {
+        out.push({ rowIndex, value: String(raw).trim() });
+        break;
+      }
+    }
+  });
+  return out;
 }
 
 /**
