@@ -148,21 +148,29 @@ function MultiValueWarning({ candidates }: { candidates: MultiValueCandidate[] }
 }
 
 function UnsurePicker({ onPick }: { onPick: (role: RoleName) => void }): JSX.Element {
-  const [choice, setChoice] = useState<RoleName>(ALL_ROLES[0]!);
+  const [choice, setChoice] = useState<RoleName | "">("");
   return (
     <div className="eq-detect__picker">
       <select
         className="eq-detect__select"
         value={choice}
-        onChange={(e) => setChoice(e.target.value as RoleName)}
+        onChange={(e) => setChoice(e.target.value as RoleName | "")}
       >
+        <option value="" disabled>
+          Pick one…
+        </option>
         {ALL_ROLES.map((r) => (
           <option key={r} value={r}>
             {entityLabel(r)}
           </option>
         ))}
       </select>
-      <button type="button" className="eq-detect__use" onClick={() => onPick(choice)}>
+      <button
+        type="button"
+        className="eq-detect__use"
+        disabled={choice === ""}
+        onClick={() => choice !== "" && onPick(choice)}
+      >
         Use this
       </button>
     </div>
