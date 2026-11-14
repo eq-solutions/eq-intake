@@ -45,7 +45,7 @@ export interface IntakeDropZoneProps {
 }
 
 export function IntakeDropZone({ bundle, onCheckConflicts }: IntakeDropZoneProps): JSX.Element {
-  const { slots, busy, ingestFiles, removeSlot, setSlotRole } = bundle;
+  const { slots, busy, ingestFiles, removeSlot, setSlotRole, unskipSlot } = bundle;
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -128,7 +128,7 @@ export function IntakeDropZone({ bundle, onCheckConflicts }: IntakeDropZoneProps
 
               const slotClass = [
                 "eq-intake-slot",
-                isUnknown || slot.error ? "eq-intake-slot--err" : "",
+                (isUnknown && !slot.skipReason) || slot.error ? "eq-intake-slot--err" : "",
               ].filter(Boolean).join(" ");
 
               return (
@@ -153,7 +153,18 @@ export function IntakeDropZone({ bundle, onCheckConflicts }: IntakeDropZoneProps
                     {slot.error && (
                       <div className="eq-intake-slot__error">{slot.error}</div>
                     )}
-                    {isUnknown && !slot.error && (
+                    {slot.skipReason && !slot.error && (
+                      <div className="eq-detect eq-detect--unsure">
+                        <div className="eq-detect__row">
+                          <span className="eq-detect__icon eq-detect__icon--unsure">–</span>
+                          <span>{slot.skipReason}</span>
+                          <button type="button" className="eq-detect__change" onClick={() => unskipSlot(i)}>
+                            Use it anyway
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {isUnknown && !slot.error && !slot.skipReason && (
                       <div className="eq-intake-slot__error">
                         Couldn't classify this file — check the column headers.
                       </div>
