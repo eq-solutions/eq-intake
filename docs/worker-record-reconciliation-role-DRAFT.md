@@ -57,10 +57,18 @@ Plain reading: an admin entering a licence for a worker lands in the worker's ow
 
 ## 3. Open questions for Royce
 
-1. **What feeds the matrix?** Answered by code: the worker's own record (verified (code)). Please confirm that is the intended design, since the old comment says the company copy is empty while the sync is still dispatching rows into it.
-2. **Shell Add Licence vs admin_backfill?** Answered by code: same path (verified (code)). Open: is the bulk Import Certificates screen meant to be the same thing for your purposes?
-3. **Reconcile against the worker's own record as well as the company copy?** Recommended: yes, own record first. Needs a read-only way for Intake to see it that does not make jvkn an Intake plane (for example a Shell read endpoint). How is a LEAD. Needs a decision.
-4. **Who owns the proposal queue?** Not decided. Rule 1 names `app_data.eq_remediation_queue` on tenant planes as the existing queue. Whether proposals about a worker's own record belong there, in Cards (where the worker accepts), or in Shell is not decided. Any new table belongs to the owning repo, not Intake (Rule 2).
+Answers added 2026-11-19 after Royce asked for them. Items 1 and 2 are settled by code. Items 3 and 4 are recommendations; the decision is Royce's.
+
+1. **What feeds the matrix?** SETTLED: the worker's own record (verified (code)). Still open: the old comment says the company copy is empty, yet the sync still sends rows into it (carried in). One of the two is stale. Settling it needs a live read, which needs Royce's yes (LEAD).
+2. **Shell Add Licence vs admin_backfill?** SETTLED: same path (verified (code)). The bulk Import Certificates screen also posts to it.
+3. **Reconcile against the worker's own record as well as the company copy?** RECOMMENDED: yes, own record first.
+   - The matrix shows the worker's own record, so wrong or missing rows there are what users see.
+   - The company copy is a second, separate report: is the daily copy keeping up?
+   - Intake needs a read-only feed of the worker's own record, asked for from eq-shell. Intake does not get its own connection to jvkn. The shape of that feed is a LEAD, not designed.
+4. **Who owns the proposal queue?** RECOMMENDED: Intake writes proposals to the existing `app_data.eq_remediation_queue` on the tenant plane. Shell owns the admin review screen.
+   - No new schema. Data-only writes are allowed under Rule 1 (verified (local)).
+   - Gap: that queue is on the tenant plane, but the worker's accept step lives in Cards on the worker's own record. Joining them is the parked "admin proposes, worker accepts" idea (carried in; migration 0286 drafted, not applied, LEAD). Until then a confirmed proposal is entered by hand through Add Licence.
+   - Any new table or screen belongs to the owning repo, not Intake (Rule 2).
 
 ## 4. What would change the recommendation
 
